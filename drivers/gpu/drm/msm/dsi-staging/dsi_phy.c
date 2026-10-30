@@ -1047,8 +1047,10 @@ int dsi_phy_set_timing_params(struct msm_dsi_phy *phy,
 		return -EINVAL;
 	}
 
+#ifndef CONFIG_SHARP_DISPLAY /* CUST_ID_00079 */
 	if (phy->cfg.is_phy_timing_present)
 		return rc;
+#endif /* CONFIG_SHARP_DISPLAY */
 
 	mutex_lock(&phy->phy_lock);
 

@@ -15,3 +15,5 @@ header-y += scsi/
 header-y += misc/
 header-y += media/
 header-y += miniISP/
+
+header-y += shterm.h

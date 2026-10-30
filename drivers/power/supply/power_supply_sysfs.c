@@ -343,6 +343,16 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(cc_soc),
 	POWER_SUPPLY_ATTR(qg_vbms_mode),
 	POWER_SUPPLY_ATTR(real_capacity),
+#ifdef CONFIG_BATTERY_SHARP
+	POWER_SUPPLY_ATTR(skin_temp),
+	POWER_SUPPLY_ATTR(cc_safety_level),
+	POWER_SUPPLY_ATTR(storming_status),
+	POWER_SUPPLY_ATTR(typec_overheat_status),
+	POWER_SUPPLY_ATTR(charger_error_status),
+	POWER_SUPPLY_ATTR(battery_full_design),
+	POWER_SUPPLY_ATTR(offchg_mode),
+	POWER_SUPPLY_ATTR(stored_learned_capacity),
+#endif /* CONFIG_BATTERY_SHARP */
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_ATTR(charge_counter_ext),
 	/* Properties of type `const char *' */

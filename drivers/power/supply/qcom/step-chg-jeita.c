@@ -199,6 +199,10 @@ clean:
 	return rc;
 }
 
+#ifdef CONFIG_BATTERY_SHARP
+#define STEP_CHG_HYSTERESIS_DEFAULT		100000
+#endif /* CONFIG_BATTERY_SHARP */
+
 static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 {
 	struct device_node *batt_node, *profile_node;
@@ -207,6 +211,11 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 	const __be32 *handle;
 	int batt_id_ohms, rc;
 	union power_supply_propval prop = {0, };
+#ifdef CONFIG_BATTERY_SHARP
+	const char *batt_type;
+	u32 step_chg_hysteresis = 0;
+#endif /* CONFIG_BATTERY_SHARP */
+
 
 	handle = of_get_property(chip->dev->of_node,
 			"qcom,battery-data", NULL);
@@ -232,8 +241,14 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 	if (batt_id_ohms < 0)
 		return -EBUSY;
 
+#ifdef CONFIG_BATTERY_SHARP
+	batt_type = "sharp";
+	profile_node = of_batterydata_get_best_profile(batt_node,
+					batt_id_ohms / 1000, batt_type);
+#else
 	profile_node = of_batterydata_get_best_profile(batt_node,
 					batt_id_ohms / 1000, NULL);
+#endif /* CONFIG_BATTERY_SHARP */
 	if (IS_ERR(profile_node))
 		return PTR_ERR(profile_node);
 
@@ -265,6 +280,16 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 		return rc;
 	}
 
+#ifdef CONFIG_BATTERY_SHARP
+	rc = of_property_read_u32(profile_node, "qcom,step-chg-hysteresis",
+					&step_chg_hysteresis);
+	if (rc < 0) {
+		pr_err("step_chg_hysteresis, rc=%d, use default value of %d\n",
+					rc, STEP_CHG_HYSTERESIS_DEFAULT);
+		step_chg_hysteresis = STEP_CHG_HYSTERESIS_DEFAULT;
+	}
+#endif /* CONFIG_BATTERY_SHARP */
+
 	chip->soc_based_step_chg =
 		of_property_read_bool(profile_node, "qcom,soc-based-step-chg");
 	if (chip->soc_based_step_chg) {
@@ -272,6 +297,9 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 		chip->step_chg_config->prop_name = "SOC";
 		chip->step_chg_config->hysteresis = 0;
 	}
+#ifdef CONFIG_BATTERY_SHARP
+		chip->step_chg_config->hysteresis = step_chg_hysteresis;
+#endif /* CONFIG_BATTERY_SHARP */
 
 	chip->step_chg_cfg_valid = true;
 	rc = read_range_data_from_node(profile_node,
@@ -500,6 +528,9 @@ reschedule:
 }
 
 #define JEITA_SUSPEND_HYST_UV		50000
+#ifdef CONFIG_BATTERY_SHARP
+#define JEITA_SUSPEND_FV_HYST_UV	30000
+#endif /* CONFIG_BATTERY_SHARP */
 static int handle_jeita(struct step_chg_info *chip)
 {
 	union power_supply_propval pval = {0, };
@@ -589,7 +620,11 @@ static int handle_jeita(struct step_chg_info *chip)
 	if (fv_uv > 0) {
 		rc = power_supply_get_property(chip->batt_psy,
 				POWER_SUPPLY_PROP_VOLTAGE_NOW, &pval);
+#ifdef CONFIG_BATTERY_SHARP
+		if (!rc && (pval.intval > fv_uv + JEITA_SUSPEND_FV_HYST_UV))
+#else /* CONFIG_BATTERY_SHARP */
 		if (!rc && (pval.intval > fv_uv))
+#endif /* CONFIG_BATTERY_SHARP */
 			vote(chip->usb_icl_votable, JEITA_VOTER, true, 0);
 		else if (pval.intval < (fv_uv - JEITA_SUSPEND_HYST_UV))
 			vote(chip->usb_icl_votable, JEITA_VOTER, false, 0);

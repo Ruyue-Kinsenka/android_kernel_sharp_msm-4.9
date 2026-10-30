@@ -1,0 +1,14 @@
+/* Copyright (c) 2018, Sharp Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ */
+
+/*
+ * NOTE: This file was not included in Sharp's released kernel source
+ * (referenced by sharp-{pucci,johnny,qe72}.dtsi but missing from
+ * the published tarball). It presumably contained the "dio" platform
+ * vibrator device tree configuration. This stub allows the device tree
+ * to compile; vibrator configuration may be incomplete.
+ */

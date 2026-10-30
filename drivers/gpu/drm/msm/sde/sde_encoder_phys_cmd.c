@@ -50,6 +50,15 @@
  */
 #define SDE_ENC_CTL_START_THRESHOLD_US 500
 
+#ifdef CONFIG_SHARP_DISPLAY /* CUST_ID_00007 */
+static struct sde_encoder_phys_cmd *sde_encoder_phys_cmd_enc[2];
+
+struct sde_encoder_phys_cmd *get_sde_encoder_phys_cmd(int index)
+{
+	return sde_encoder_phys_cmd_enc[index];
+}
+#endif /* CONFIG_SHARP_DISPLAY */
+
 static inline int _sde_encoder_phys_cmd_get_idle_timeout(
 		struct sde_encoder_phys_cmd *cmd_enc)
 {
@@ -1180,8 +1189,24 @@ static int _sde_encoder_phys_cmd_wait_for_ctl_start(
 		else
 			ret = 0;
 
-		if (sde_encoder_phys_cmd_is_master(phys_enc))
+		if (sde_encoder_phys_cmd_is_master(phys_enc)) {
+			/*
+			 * Signaling the retire fence at ctl start timeout
+			 * to allow the next commit and avoid device freeze.
+			 * As ctl start timeout can occurs due to no read ptr,
+			 * updating pending_rd_ptr_cnt here may not cover all
+			 * cases. Hence signaling the retire fence.
+			 */
+			if (atomic_add_unless(
+			 &phys_enc->pending_retire_fence_cnt, -1, 0))
+				phys_enc->parent_ops.handle_frame_done(
+				 phys_enc->parent,
+				 phys_enc,
+				 SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE);
+			atomic_add_unless(
+				&phys_enc->pending_ctlstart_cnt, -1, 0);
 			atomic_inc_return(&phys_enc->ctlstart_timeout);
+		}
 	}
 
 	return ret;
@@ -1487,6 +1512,13 @@ struct sde_encoder_phys *sde_encoder_phys_cmd_init(
 	init_waitqueue_head(&cmd_enc->pending_vblank_wq);
 	atomic_set(&cmd_enc->autorefresh.kickoff_cnt, 0);
 	init_waitqueue_head(&cmd_enc->autorefresh.kickoff_wq);
+#ifdef CONFIG_SHARP_DISPLAY /* CUST_ID_00007 */
+	if (p->intf_idx == 2) { /* Master */
+		sde_encoder_phys_cmd_enc[0] = cmd_enc;
+	} else if (p->intf_idx == 3) { /* Slave */
+		sde_encoder_phys_cmd_enc[1] = cmd_enc;
+	}
+#endif /* CONFIG_SHARP_DISPLAY */
 
 	SDE_DEBUG_CMDENC(cmd_enc, "created\n");
 

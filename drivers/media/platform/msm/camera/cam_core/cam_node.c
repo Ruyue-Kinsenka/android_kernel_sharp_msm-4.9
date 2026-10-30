@@ -328,7 +328,13 @@ static int __cam_node_handle_release_dev(struct cam_node *node,
 		goto destroy_dev_hdl;
 	}
 
+/* SHLOCAL_CAMERA_DRIVERS-> *//* for SIGSEGV with longshot */
+#if 0
 	cam_context_putref(ctx);
+#else
+	cam_node_put_ctxt_to_free_list(&ctx->refcount);
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 
 destroy_dev_hdl:
 	rc = cam_destroy_device_hdl(release->dev_handle);

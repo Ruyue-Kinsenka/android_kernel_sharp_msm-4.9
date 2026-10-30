@@ -108,7 +108,12 @@
 };
 
 &cam_cci {
-	qcom,cam-res-mgr {
+
+
+/* SHLOCAL_CAMERA_DRIVER-> */
+	// qcom,cam-res-mgr {
+	cam_res_mgr: qcom,cam-res-mgr {
+/* SHLOCAL_CAMERA_DRIVER<- */
 		compatible = "qcom,cam-res-mgr";
 		status = "ok";
 	};
@@ -289,7 +294,10 @@
 		clock-rates = <24000000>;
 	};
 
-	qcom,cam-sensor@0 {
+/* SHLOCAL_CAMERA_DRIVER-> */
+	// qcom,cam-sensor@0 {
+	cam_sensor0: qcom,cam-sensor@0 {
+/* SHLOCAL_CAMERA_DRIVER<- */
 		cell-index = <0>;
 		compatible = "qcom,cam-sensor";
 		reg = <0x0>;
@@ -336,7 +344,10 @@
 		clock-rates = <24000000>;
 	};
 
-	qcom,cam-sensor@1 {
+/* SHLOCAL_CAMERA_DRIVER-> */
+	// qcom,cam-sensor@1 {
+	cam_sensor1: qcom,cam-sensor@1 {
+/* SHLOCAL_CAMERA_DRIVER<- */
 		cell-index = <1>;
 		compatible = "qcom,cam-sensor";
 		reg = <0x1>;
@@ -379,7 +390,10 @@
 		clock-rates = <24000000>;
 	};
 
-	qcom,cam-sensor@2 {
+/* SHLOCAL_CAMERA_DRIVER-> */
+	// qcom,cam-sensor@2 {
+	cam_sensor2: qcom,cam-sensor@2 {
+/* SHLOCAL_CAMERA_DRIVER<- */
 		cell-index = <2>;
 		compatible = "qcom,cam-sensor";
 		reg = <0x02>;
@@ -422,7 +436,10 @@
 		clock-rates = <24000000>;
 	};
 
-	qcom,cam-sensor@3 {
+/* SHLOCAL_CAMERA_DRIVER-> */
+	// qcom,cam-sensor@3 {
+	cam_sensor3: qcom,cam-sensor@3 {
+/* SHLOCAL_CAMERA_DRIVER<- */
 		cell-index = <3>;
 		compatible = "qcom,cam-sensor";
 		reg = <0x03>;
@@ -430,7 +447,10 @@
 		sensor-position-roll = <270>;
 		sensor-position-pitch = <0>;
 		sensor-position-yaw = <0>;
-		led-flash-src = <&led_flash_iris>;
+/* COORDINATOR Qualcomm_PostCS5 BUILDERR MODIFY start */
+//		led-flash-src = <&led_flash_iris>;
+		led-flash-src = <0>;
+/* COORDINATOR Qualcomm_PostCS5 BUILDERR MODIFY end */
 		cam_vio-supply = <&pm8998_lvs1>;
 		cam_vana-supply = <&camera_vana_ldo>;
 		cam_vdig-supply = <&camera_ldo>;

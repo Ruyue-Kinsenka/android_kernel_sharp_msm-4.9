@@ -22,6 +22,8 @@
 #include <linux/fs_struct.h>
 #include <linux/ratelimit.h>
 
+#define ECRYPTFS_INFO_FILE_FOR_SD ".EfsSdEncryptInfo"
+
 const struct cred *override_fsids(struct sdcardfs_sb_info *sbi,
 		struct sdcardfs_inode_data *data)
 {
@@ -71,6 +73,11 @@ static int sdcardfs_create(struct inode *dir, struct dentry *dentry,
 	struct fs_struct *copied_fs;
 
 	if (!check_caller_access_to_name(dir, &dentry->d_name)) {
+		err = -EACCES;
+		goto out_eacces;
+	}
+
+	if (!strcasecmp(dentry->d_name.name, ECRYPTFS_INFO_FILE_FOR_SD)) {
 		err = -EACCES;
 		goto out_eacces;
 	}
@@ -137,6 +144,11 @@ static int sdcardfs_unlink(struct inode *dir, struct dentry *dentry)
 	const struct cred *saved_cred = NULL;
 
 	if (!check_caller_access_to_name(dir, &dentry->d_name)) {
+		err = -EACCES;
+		goto out_eacces;
+	}
+
+	if (!strcasecmp(dentry->d_name.name, ECRYPTFS_INFO_FILE_FOR_SD)) {
 		err = -EACCES;
 		goto out_eacces;
 	}
@@ -414,6 +426,12 @@ static int sdcardfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		goto out_eacces;
 	}
 
+	if (!strcasecmp(old_dentry->d_name.name, ECRYPTFS_INFO_FILE_FOR_SD)
+		|| !strcasecmp(new_dentry->d_name.name, ECRYPTFS_INFO_FILE_FOR_SD)) {
+		err = -EACCES;
+		goto out_eacces;
+	}
+
 	/* save current_cred and override it */
 	saved_cred = override_fsids(SDCARDFS_SB(old_dir->i_sb),
 						SDCARDFS_I(new_dir)->data);
@@ -615,6 +633,10 @@ static int sdcardfs_setattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	if (!top)
 		return -EINVAL;
 
+	if (!strcasecmp(dentry->d_name.name, ECRYPTFS_INFO_FILE_FOR_SD)) {
+		return -EACCES;
+	}
+
 	/*
 	 * Permission check on sdcardfs inode.
 	 * Calling process should have AID_SDCARD_RW permission
@@ -776,6 +798,8 @@ static int sdcardfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	if (err)
 		goto out;
 	sdcardfs_copy_and_fix_attrs(d_inode(dentry),
+			      d_inode(lower_path.dentry));
+	fsstack_copy_inode_size(dentry->d_inode,
 			      d_inode(lower_path.dentry));
 	err = sdcardfs_fillattr(mnt, d_inode(dentry), &lower_stat, stat);
 out:

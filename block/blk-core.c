@@ -65,6 +65,8 @@ struct kmem_cache *blk_requestq_cachep;
  */
 static struct workqueue_struct *kblockd_workqueue;
 
+//static time_t last_event_time;
+
 static void blk_clear_congested(struct request_list *rl, int sync)
 {
 #ifdef CONFIG_CGROUP_WRITEBACK
@@ -864,6 +866,7 @@ blk_init_allocated_queue(struct request_queue *q, request_fn_proc *rfn,
 
 fail:
 	blk_free_flush_queue(q->fq);
+	q->fq = NULL;
 	return NULL;
 }
 EXPORT_SYMBOL(blk_init_allocated_queue);
@@ -2603,6 +2606,22 @@ bool blk_update_request(struct request *req, int error, unsigned int nr_bytes)
 				   req->rq_disk->disk_name : "?",
 				   (unsigned long long)blk_rq_pos(req));
 
+//		if ( req->rq_disk &&
+//			strcmp(req->rq_disk->disk_name, "mmcblk0") == 0) {
+//			//strcmp(req->rq_disk->disk_name, "mmcblk1") == 0) {
+//			time_t now = current_kernel_time().tv_sec;
+//			time_t duration = now - last_event_time;
+//			if ( !last_event_time || duration > 24 * 60 * 60 ) {
+//				char event[] = "SD_IO_ERROR=1";
+//				char *envp[] = { event, NULL };
+//				printk_ratelimited(KERN_ERR "%s: sending sd io error uevent, dev %s, duration %ld\n",__func__, req->rq_disk->disk_name, duration);
+//				kobject_uevent_env(&disk_to_dev(req->rq_disk)->kobj, KOBJ_CHANGE, envp);
+//				last_event_time = now;
+//			}
+//			else {
+//				printk_ratelimited(KERN_ERR "%s: skip sd io error uevent, duration %ld\n",__func__, duration);
+//			}
+//		}
 	}
 
 	blk_account_io_completion(req, nr_bytes);
@@ -3569,6 +3588,8 @@ int __init blk_dev_init(void)
 					    WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);
 	if (!kblockd_workqueue)
 		panic("Failed to create kblockd\n");
+
+//    last_event_time = 0;
 
 	request_cachep = kmem_cache_create("blkdev_requests",
 			sizeof(struct request), 0, SLAB_PANIC, NULL);

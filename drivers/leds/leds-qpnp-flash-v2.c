@@ -1281,11 +1281,23 @@ static int qpnp_flash_led_switch_disable(struct flash_switch_data *snode)
 	struct qpnp_flash_led *led = dev_get_drvdata(&snode->pdev->dev);
 	int i, rc, addr_offset;
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if 0
 	rc = qpnp_flash_led_masked_write(led,
 				FLASH_LED_EN_LED_CTRL(led->base),
 				snode->led_mask, FLASH_LED_DISABLE);
 	if (rc < 0)
 		return rc;
+#else
+	if (led->enable == 1) {
+		rc = qpnp_flash_led_masked_write(led,
+					FLASH_LED_EN_LED_CTRL(led->base),
+					snode->led_mask, FLASH_LED_DISABLE);
+		if (rc < 0)
+			return rc;
+	}
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 
 	if (led->trigger_lmh) {
 		rc = qpnp_flash_led_masked_write(led,

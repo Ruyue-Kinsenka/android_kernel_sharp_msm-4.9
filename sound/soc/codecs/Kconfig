@@ -1096,4 +1096,8 @@ config SND_SOC_AW8896
 	help
 	  Enables support for aw8896 series Smart PA.
 
+#/* SH_AUDIO_DRIVER -> */ /*A-004*/
+source "sound/soc/codecs/tfa/Kconfig"
+#/* SH_AUDIO_DRIVER <- */ /*A-004*/
+
 endmenu

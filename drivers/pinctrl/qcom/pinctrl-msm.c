@@ -643,6 +643,10 @@ static void msm_gpio_irq_unmask(struct irq_data *d)
 		val = readl_relaxed(pctrl->regs + g->intr_status_reg);
 		val &= ~BIT(g->intr_status_bit);
 		writel_relaxed(val, pctrl->regs + g->intr_status_reg);
+	} else {
+		val = readl(pctrl->regs + g->intr_status_reg);
+		val &= ~BIT(g->intr_status_bit);
+		writel(val, pctrl->regs + g->intr_status_reg);
 	}
 
 	val = readl(pctrl->regs + g->intr_cfg_reg);

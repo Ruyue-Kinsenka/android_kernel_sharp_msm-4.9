@@ -1286,8 +1286,13 @@ cpufreq_platform_cooling_register(const struct cpumask *clip_cpus,
 	struct device_node *cpu_node;
 
 	cpu_node = of_cpu_device_node_get(cpumask_first(clip_cpus));
+#ifdef CONFIG_SHARP_PNP_THERMAL
+	return __cpufreq_cooling_register(cpu_node, clip_cpus, 0, NULL,
+						NULL);
+#else /* CONFIG_SHARP_PNP_THERMAL */
 	return __cpufreq_cooling_register(cpu_node, clip_cpus, 0, NULL,
 						plat_ops);
+#endif /* CONFIG_SHARP_PNP_THERMAL */
 }
 EXPORT_SYMBOL(cpufreq_platform_cooling_register);
 

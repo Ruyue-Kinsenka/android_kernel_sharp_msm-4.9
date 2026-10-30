@@ -167,6 +167,7 @@
 	/delete-property/ mipi-csi-vdd-supply;
 };
 
+#if 0 /* SHARP CAMERA CUSTOM */
 &led_flash_rear {
 	/delete-property/ flash-source;
 	/delete-property/ torch-source;
@@ -210,6 +211,7 @@
 	/delete-property/ cam_vio-supply;
 	/delete-property/ cam_vana-supply;
 };
+#endif /* SHARP CAMERA CUSTOM */
 
 &cam_cci {
 	qcom,cam-sensor@0 {

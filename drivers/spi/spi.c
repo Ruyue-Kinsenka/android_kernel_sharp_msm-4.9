@@ -39,6 +39,8 @@
 #include <linux/acpi.h>
 #include <linux/highmem.h>
 
+#include "sh_spi_util.h"
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/spi.h>
 
@@ -985,6 +987,8 @@ static int spi_transfer_one_message(struct spi_master *master,
 	struct spi_statistics *statm = &master->statistics;
 	struct spi_statistics *stats = &msg->spi->statistics;
 
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &master->dev, "start\n");
+
 	spi_set_cs(msg->spi, true);
 
 	SPI_STATISTICS_INCREMENT_FIELD(statm, messages);
@@ -1075,6 +1079,7 @@ out:
 
 	spi_finalize_current_message(master);
 
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &master->dev, "end (ret:%d)\n", ret);
 	return ret;
 }
 
@@ -2705,6 +2710,8 @@ int spi_async(struct spi_device *spi, struct spi_message *message)
 	int ret;
 	unsigned long flags;
 
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "start\n");
+
 	ret = __spi_validate(spi, message);
 	if (ret != 0)
 		return ret;
@@ -2717,6 +2724,8 @@ int spi_async(struct spi_device *spi, struct spi_message *message)
 		ret = __spi_async(spi, message);
 
 	spin_unlock_irqrestore(&master->bus_lock_spinlock, flags);
+
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "end (ret:%d)\n", ret);
 
 	return ret;
 }
@@ -2759,6 +2768,8 @@ int spi_async_locked(struct spi_device *spi, struct spi_message *message)
 	int ret;
 	unsigned long flags;
 
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "start\n");
+
 	ret = __spi_validate(spi, message);
 	if (ret != 0)
 		return ret;
@@ -2768,6 +2779,8 @@ int spi_async_locked(struct spi_device *spi, struct spi_message *message)
 	ret = __spi_async(spi, message);
 
 	spin_unlock_irqrestore(&master->bus_lock_spinlock, flags);
+
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "end (ret:%d)\n", ret);
 
 	return ret;
 
@@ -2782,6 +2795,8 @@ int spi_flash_read(struct spi_device *spi,
 	struct spi_master *master = spi->master;
 	struct device *rx_dev = NULL;
 	int ret;
+
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "start\n");
 
 	if ((msg->opcode_nbits == SPI_NBITS_DUAL ||
 	     msg->addr_nbits == SPI_NBITS_DUAL) &&
@@ -2826,6 +2841,8 @@ int spi_flash_read(struct spi_device *spi,
 
 	if (master->auto_runtime_pm)
 		pm_runtime_put(master->dev.parent);
+
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "end (ret:%d)\n", ret);
 
 	return ret;
 }
@@ -2922,9 +2939,13 @@ int spi_sync(struct spi_device *spi, struct spi_message *message)
 {
 	int ret;
 
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "start\n");
+
 	mutex_lock(&spi->master->bus_lock_mutex);
 	ret = __spi_sync(spi, message);
 	mutex_unlock(&spi->master->bus_lock_mutex);
+
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "end (ret:%d)\n", ret);
 
 	return ret;
 }
@@ -2948,7 +2969,19 @@ EXPORT_SYMBOL_GPL(spi_sync);
  */
 int spi_sync_locked(struct spi_device *spi, struct spi_message *message)
 {
+#if defined(CONFIG_SPI_SHARP_EXPAND_DEBUG_FUNCTION)
+	int ret;
+
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "start\n");
+
+	ret = __spi_sync(spi, message, 1);
+
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "end (ret:%d)\n", ret);
+
+	return ret;
+#else
 	return __spi_sync(spi, message);
+#endif	/* defined(CONFIG_SPI_SHARP_EXPAND_DEBUG_FUNCTION) */
 }
 EXPORT_SYMBOL_GPL(spi_sync_locked);
 
@@ -3043,6 +3076,8 @@ int spi_write_then_read(struct spi_device *spi,
 	struct spi_transfer	x[2];
 	u8			*local_buf;
 
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "start\n");
+
 	/* Use preallocated DMA-safe buffer if we can.  We can't avoid
 	 * copying here, (as a pure convenience thing), but we can
 	 * keep heap costs out of the hot path unless someone else is
@@ -3081,6 +3116,8 @@ int spi_write_then_read(struct spi_device *spi,
 		mutex_unlock(&lock);
 	else
 		kfree(local_buf);
+
+	SH_SPILOG_DEBUG(SH_LOG_TRACE_H, &spi->dev, "end (status:%d)\n", status);
 
 	return status;
 }

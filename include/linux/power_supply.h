@@ -306,6 +306,16 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_CC_SOC,
 	POWER_SUPPLY_PROP_QG_VBMS_MODE,
 	POWER_SUPPLY_PROP_REAL_CAPACITY,
+#ifdef CONFIG_BATTERY_SHARP
+	POWER_SUPPLY_PROP_SKIN_TEMP,
+	POWER_SUPPLY_PROP_CC_SAFETY_LEVEL,
+	POWER_SUPPLY_PROP_STORMING_STATUS,
+	POWER_SUPPLY_PROP_TYPEC_OVERHEAT_STATUS,
+	POWER_SUPPLY_PROP_CHARGER_ERROR_STATUS,
+	POWER_SUPPLY_PROP_BATTERY_FULL_DESIGN,
+	POWER_SUPPLY_PROP_OFFCHG_MODE,
+	POWER_SUPPLY_PROP_STORED_LEARNED_CAPACITY,
+#endif /* CONFIG_BATTERY_SHARP */
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT,
 	/* Properties of type `const char *' */
@@ -367,6 +377,15 @@ enum power_supply_typec_power_role {
 enum power_supply_notifier_events {
 	PSY_EVENT_PROP_CHANGED,
 };
+
+#ifdef CONFIG_BATTERY_SHARP
+enum power_supply_cc_safety_level {
+	POWER_SUPPLY_CC_SAFETY_LEVEL0,	/* No problem */
+	POWER_SUPPLY_CC_SAFETY_LEVEL1,	/* Short detected */
+	POWER_SUPPLY_CC_SAFETY_LEVEL2,	/* Charger connected after short detected */
+	POWER_SUPPLY_CC_SAFETY_LEVEL3,	/* USB therm overheat */
+};
+#endif /* CONFIG_BATTERY_SHARP */
 
 union power_supply_propval {
 	int intval;

@@ -930,6 +930,11 @@ static int ecryptfs_setattr(struct dentry *dentry, struct iattr *ia)
 	}
 	mutex_unlock(&crypt_stat->cs_mutex);
 
+	/* Allow touch updating timestamps. A previous permission check ensures
+	 * we have write access. Changes to mode, owner, and group are ignored
+	 */
+	ia->ia_valid |= ATTR_FORCE;
+
 	rc = setattr_prepare(dentry, ia);
 	if (rc)
 		goto out;

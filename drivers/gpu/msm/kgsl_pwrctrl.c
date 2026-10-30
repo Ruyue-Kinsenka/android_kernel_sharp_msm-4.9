@@ -176,6 +176,14 @@ static unsigned int _adjust_pwrlevel(struct kgsl_pwrctrl *pwr, int level,
 					pwr->thermal_pwrlevel_floor,
 					pwr->min_pwrlevel);
 
+#ifdef CONFIG_SHARP_PNP_THERMAL
+       /* Ensure that max/min pwrlevels are within thermal max/min limits */
+       max_pwrlevel = min_t(unsigned int, max_pwrlevel,
+                                       pwr->thermal_pwrlevel_floor);
+       min_pwrlevel = max_t(unsigned int, min_pwrlevel,
+                                       pwr->thermal_pwrlevel);
+#endif /* CONFIG_SHARP_PNP_THERMAL */
+
 	switch (pwrc->type) {
 	case KGSL_CONSTRAINT_PWRLEVEL: {
 		switch (pwrc->sub_type) {

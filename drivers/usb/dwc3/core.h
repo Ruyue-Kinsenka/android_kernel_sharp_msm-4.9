@@ -1197,6 +1197,10 @@ struct dwc3 {
 	int			core_id;
 	int			retries_on_error;
 	bool			normal_eps_in_gsi_mode;
+#ifdef CONFIG_USB_DWC3_SHARP_CUST
+   /* force full-speed enable */
+	unsigned long           fs_connect_enable;
+#endif /* CONFIG_USB_DWC3_SHARP_CUST */
 };
 
 /* -------------------------------------------------------------------------- */
