@@ -2516,7 +2516,7 @@ fail_release_plane2:
 	primary_state->crtc_h = vdisplay;
 	primary_state->src_x = set->x << 16;
 	primary_state->src_y = set->y << 16;
-	if (primary_state->rotation & (DRM_ROTATE_90 | DRM_ROTATE_270)) {
+	if (primary_state->rotation & (DRM_MODE_ROTATE_90 | DRM_MODE_ROTATE_270)) {
 		primary_state->src_w = vdisplay << 16;
 		primary_state->src_h = hdisplay << 16;
 	} else {
@@ -3240,7 +3240,7 @@ void drm_atomic_helper_plane_reset(struct drm_plane *plane)
 
 	if (plane->state) {
 		plane->state->plane = plane;
-		plane->state->rotation = DRM_ROTATE_0;
+		plane->state->rotation = DRM_MODE_ROTATE_0;
 	}
 }
 EXPORT_SYMBOL(drm_atomic_helper_plane_reset);

@@ -307,8 +307,7 @@ static void dwc3_frame_length_adjustment(struct dwc3 *dwc)
 
 	reg = dwc3_readl(dwc->regs, DWC3_GFLADJ);
 	dft = reg & DWC3_GFLADJ_30MHZ_MASK;
-	if (!dev_WARN_ONCE(dwc->dev, dft == dwc->fladj,
-	    "request value same as default, ignoring\n")) {
+	if (dft != dwc->fladj) {
 		reg &= ~DWC3_GFLADJ_30MHZ_MASK;
 		reg |= DWC3_GFLADJ_30MHZ_SDBND_SEL | dwc->fladj;
 		dwc3_writel(dwc->regs, DWC3_GFLADJ, reg);
@@ -696,11 +695,11 @@ static void dwc3_core_exit(struct dwc3 *dwc)
 {
 	dwc3_event_buffers_cleanup(dwc);
 
-	phy_exit(dwc->usb2_generic_phy);
-	phy_exit(dwc->usb3_generic_phy);
-
 	phy_power_off(dwc->usb2_generic_phy);
 	phy_power_off(dwc->usb3_generic_phy);
+
+	phy_exit(dwc->usb2_generic_phy);
+	phy_exit(dwc->usb3_generic_phy);
 }
 
 /**
@@ -1286,9 +1285,17 @@ static int dwc3_probe(struct platform_device *pdev)
 					"snps,usb2-l1-disable");
 	dwc->normal_eps_in_gsi_mode = device_property_read_bool(dev,
 					"normal-eps-in-gsi-mode");
+	dwc->enable_super_speed = device_property_read_bool(dev,
+					"op,enable_super_speed");
 	if (dwc->enable_bus_suspend) {
 		pm_runtime_set_autosuspend_delay(dev, 500);
 		pm_runtime_use_autosuspend(dev);
+	}
+
+	if (!dwc->enable_super_speed) {
+		pr_info("Force USB running as High speed");
+		dwc->max_hw_supp_speed = USB_SPEED_HIGH;
+		dwc->maximum_speed = USB_SPEED_HIGH;
 	}
 
 	dwc->lpm_nyet_threshold = lpm_nyet_threshold;
@@ -1405,8 +1412,8 @@ static int dwc3_remove(struct platform_device *pdev)
 	 */
 	res->start -= DWC3_GLOBALS_REGS_START;
 
-	dwc3_debugfs_exit(dwc);
 	dwc3_core_exit_mode(dwc);
+	dwc3_debugfs_exit(dwc);
 
 	dwc3_core_exit(dwc);
 	dwc3_ulpi_exit(dwc);

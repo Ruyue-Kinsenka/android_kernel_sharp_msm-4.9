@@ -24,3 +24,7 @@ header-y += sde_drm.h
 header-y += msm_drm_pp.h
 header-y += drm_smem.h
 header-y += sharp_drm.h
+no-export-headers += armada_drm.h
+no-export-headers += etnaviv_drm.h
+no-export-headers += omap_drm.h
+no-export-headers += vgem_drm.h

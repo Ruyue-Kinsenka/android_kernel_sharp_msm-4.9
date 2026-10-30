@@ -183,3 +183,4 @@ obj-$(CONFIG_SENSORS_SSC)		+= sensors/
 obj-$(CONFIG_TEE)		+= tee/
 obj-$(CONFIG_SHARP_PSALS_SMEM_READ) += sharp/proximity_light/
 obj-$(CONFIG_PROXIMITY_CHECKER) += sharp/proximity/
+obj-y				+= oneplus/

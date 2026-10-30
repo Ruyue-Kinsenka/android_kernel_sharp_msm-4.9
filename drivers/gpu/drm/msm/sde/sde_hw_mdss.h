@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -64,6 +64,8 @@ enum sde_format_flags {
 #define SDE_FORMAT_IS_UBWC(X) \
 	(((X)->fetch_mode == SDE_FETCH_UBWC) && \
 			test_bit(SDE_FORMAT_FLAG_COMPRESSED_BIT, (X)->flag))
+
+#define TO_S15D16(_x_) ((_x_) << 7)
 
 #define SDE_BLEND_FG_ALPHA_FG_CONST	(0 << 0)
 #define SDE_BLEND_FG_ALPHA_BG_CONST	(1 << 0)
@@ -391,6 +393,18 @@ enum sde_3d_blend_mode {
 	BLEND_3D_MAX
 };
 
+enum sde_csc_type {
+	SDE_CSC_RGB2YUV_601L,
+	SDE_CSC_RGB2YUV_601FR,
+	SDE_CSC_RGB2YUV_709L,
+	SDE_CSC_RGB2YUV_709FR,
+	SDE_CSC_RGB2YUV_2020L,
+	SDE_CSC_RGB2YUV_2020FR,
+	SDE_CSC_RGB2RGB_L,
+	SDE_CSC_RGB2RGB_FR,
+	SDE_MAX_CSC
+};
+
 /** struct sde_format - defines the format configuration which
  * allows SDE HW to correctly fetch and decode the format
  * @base: base msm_format struture containing fourcc code
@@ -529,6 +543,13 @@ struct sde_hw_cp_cfg {
  * @rect: Dim layer coordinates
  */
 struct sde_hw_dim_layer {
+	uint32_t flags;
+	uint32_t stage;
+	struct sde_mdss_color color_fill;
+	struct sde_rect rect;
+};
+
+struct fingerprint_dim_layer {
 	uint32_t flags;
 	uint32_t stage;
 	struct sde_mdss_color color_fill;

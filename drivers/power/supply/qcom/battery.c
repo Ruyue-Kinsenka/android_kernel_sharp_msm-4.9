@@ -1,4 +1,4 @@
-/* Copyright (c) 2018 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018,2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -616,7 +616,7 @@ static int pl_fcc_vote_callback(struct votable *votable, void *data,
 
 	if (!chip->main_psy)
 		return 0;
-
+	pr_info("total_fcc_ua=%d\n", total_fcc_ua);
 	if (chip->pl_mode != POWER_SUPPLY_PL_NONE) {
 		get_fcc_split(chip, total_fcc_ua, &master_fcc_ua,
 				&slave_fcc_ua);
@@ -850,6 +850,7 @@ static int pl_fv_vote_callback(struct votable *votable, void *data,
 		return 0;
 
 	pval.intval = fv_uv;
+	pr_info("fv_uv=%d\n", fv_uv);
 
 	rc = power_supply_set_property(chip->main_psy,
 			POWER_SUPPLY_PROP_VOLTAGE_MAX, &pval);
@@ -955,6 +956,7 @@ static int usb_icl_vote_callback(struct votable *votable, void *data,
 				POWER_SUPPLY_PROP_CURRENT_MAX,
 				&pval);
 	}
+	pr_info("total_icl_ua=%d\n", icl_ua);
 
 	/* set the effective ICL */
 	pval.intval = icl_ua;
@@ -1610,6 +1612,12 @@ int qcom_batt_init(int smb_version)
 	if (!chip->pl_ws)
 		goto cleanup;
 
+	INIT_DELAYED_WORK(&chip->status_change_work, status_change_work);
+	INIT_WORK(&chip->pl_taper_work, pl_taper_work);
+	INIT_WORK(&chip->pl_disable_forever_work, pl_disable_forever_work);
+	INIT_DELAYED_WORK(&chip->pl_awake_work, pl_awake_work);
+	INIT_DELAYED_WORK(&chip->fcc_stepper_work, fcc_stepper_work);
+
 	chip->fcc_votable = create_votable("FCC", VOTE_MIN,
 					pl_fcc_vote_callback,
 					chip);
@@ -1663,12 +1671,6 @@ int qcom_batt_init(int smb_version)
 	}
 
 	vote(chip->pl_disable_votable, PL_INDIRECT_VOTER, true, 0);
-
-	INIT_DELAYED_WORK(&chip->status_change_work, status_change_work);
-	INIT_WORK(&chip->pl_taper_work, pl_taper_work);
-	INIT_WORK(&chip->pl_disable_forever_work, pl_disable_forever_work);
-	INIT_DELAYED_WORK(&chip->pl_awake_work, pl_awake_work);
-	INIT_DELAYED_WORK(&chip->fcc_stepper_work, fcc_stepper_work);
 
 	rc = pl_register_notifier(chip);
 	if (rc < 0) {

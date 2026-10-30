@@ -674,5 +674,9 @@ int dsi_display_set_mode_sub_wrap(struct dsi_display *display,
 			 struct dsi_display_mode *mode,
 			 u32 flags);
 #endif /* CONFIG_SHARP_DISPLAY */
+struct dsi_display *get_main_display(void);
+
+extern int connector_state_crtc_index;
+extern int msm_drm_notifier_call_chain(unsigned long val, void *v);
 
 #endif /* _DSI_DISPLAY_H_ */

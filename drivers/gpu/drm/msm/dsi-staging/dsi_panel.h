@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -106,6 +106,7 @@ struct dsi_backlight_config {
 	u32 bl_level;
 	u32 bl_scale;
 	u32 bl_scale_ad;
+	bool bl_high2bit;
 
 	int en_gpio;
 	/* PWM params */
@@ -189,6 +190,24 @@ enum dsi_panel_type {
 	DSI_PANEL_TYPE_MAX,
 };
 
+enum dsi_panel_display_mode {
+	DISPLAY_MODE_DEFAULT,
+	DISPLAY_MODE_SRGB,
+	DISPLAY_MODE_DCI_P3,
+	DISPLAY_MODE_WIDE_COLOR,
+};
+
+/* Extended Panel config for panels with additional gpios */
+struct dsi_panel_exd_config {
+	int display_1p8_en;
+	int led_5v_en;
+	int switch_power;
+	int led_en1;
+	int led_en2;
+	int oenab;
+	int selab;
+};
+
 struct dsi_panel {
 	const char *name;
 	enum dsi_panel_type type;
@@ -218,6 +237,18 @@ struct dsi_panel {
 	struct dsi_pinctrl_info pinctrl;
 	struct drm_panel_hdr_properties hdr_props;
 	struct drm_panel_esd_config esd_config;
+
+	int hbm_mode;
+	enum dsi_panel_display_mode display_mode;
+
+	int aod_mode;
+	int aod_status;
+	int aod_curr_mode;
+	int aod_disable;
+	int hbm_backlight;
+	bool is_hbm_enabled;
+	int  op_force_screenfp;
+	bool dim_status;
 
 	bool lp11_init;
 	bool ulps_enabled;
@@ -252,6 +283,8 @@ struct dsi_panel {
 	int mfr_idx;
 	struct dsi_panel_mfr_ctrl *mfr_config;
 #endif /* CONFIG_SHARP_DISPLAY */
+
+	struct dsi_panel_exd_config exd_config;
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
@@ -323,6 +356,8 @@ int dsi_panel_enable(struct dsi_panel *panel);
 
 int dsi_panel_post_enable(struct dsi_panel *panel);
 
+int dsi_panel_init_display_modes(struct dsi_panel *panel);
+
 int dsi_panel_pre_disable(struct dsi_panel *panel);
 
 int dsi_panel_disable(struct dsi_panel *panel);
@@ -330,6 +365,11 @@ int dsi_panel_disable(struct dsi_panel *panel);
 int dsi_panel_unprepare(struct dsi_panel *panel);
 
 int dsi_panel_post_unprepare(struct dsi_panel *panel);
+
+int dsi_panel_apply_hbm_mode(struct dsi_panel *panel);
+
+int dsi_panel_apply_display_mode_locked(struct dsi_panel *panel);
+int dsi_panel_apply_display_mode(struct dsi_panel *panel);
 
 int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl);
 
@@ -360,4 +400,7 @@ int dsi_panel_set_ext_clk_state(struct dsi_panel *panel, bool enable);
 int dsi_panel_backlight_mfr(struct dsi_panel *panel, int value);
 #endif /* CONFIG_SHARP_DISPLAY */
 
+int dsi_panel_set_aod_mode(struct dsi_panel *panel, int level);
+
+int dsi_panel_update_backlight(struct dsi_panel *panel, u32 bl_lvl);
 #endif /* _DSI_PANEL_H_ */

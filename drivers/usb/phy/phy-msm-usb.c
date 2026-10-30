@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2019, Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2020, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -218,6 +218,7 @@ struct msm_otg_platform_data {
 };
 
 #define SDP_CHECK_DELAY_MS 10000 /* in ms */
+#define SDP_CHECK_BOOT_DELAY_MS 30000 /* in ms */
 
 #define MSM_USB_BASE	(motg->regs)
 #define MSM_USB_PHY_CSR_BASE (motg->phy_csr_regs)
@@ -889,6 +890,7 @@ static int msm_otg_reset(struct usb_phy *phy)
 	u32 val = 0;
 	u32 ulpi_val = 0;
 
+	mutex_lock(&motg->lock);
 	msm_otg_dbg_log_event(&motg->phy, "USB RESET", phy->otg->state,
 			get_pm_runtime_counter(phy->dev));
 	/*
@@ -897,10 +899,13 @@ static int msm_otg_reset(struct usb_phy *phy)
 	 * USB BAM reset on other cases e.g. USB cable disconnections.
 	 * If hardware reported error then it must be reset for recovery.
 	 */
-	if (motg->err_event_seen)
+	if (motg->err_event_seen) {
 		dev_info(phy->dev, "performing USB h/w reset for recovery\n");
-	else if (pdata->disable_reset_on_disconnect && motg->reset_counter)
+	} else if (pdata->disable_reset_on_disconnect &&
+				motg->reset_counter) {
+		mutex_unlock(&motg->lock);
 		return 0;
+	}
 
 	motg->reset_counter++;
 
@@ -915,6 +920,7 @@ static int msm_otg_reset(struct usb_phy *phy)
 			enable_irq(motg->phy_irq);
 
 		enable_irq(motg->irq);
+		mutex_unlock(&motg->lock);
 		return ret;
 	}
 
@@ -925,6 +931,7 @@ static int msm_otg_reset(struct usb_phy *phy)
 	ret = msm_otg_link_reset(motg);
 	if (ret) {
 		dev_err(phy->dev, "link reset failed\n");
+		mutex_unlock(&motg->lock);
 		return ret;
 	}
 
@@ -981,6 +988,7 @@ static int msm_otg_reset(struct usb_phy *phy)
 
 	if (phy->otg->state == OTG_STATE_UNDEFINED && motg->rm_pulldown)
 		msm_chg_block_on(motg);
+	mutex_unlock(&motg->lock);
 
 	return 0;
 }
@@ -1919,12 +1927,13 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned int mA)
 							motg->chg_type);
 
 	psy_type = get_psy_type(motg);
-	if (psy_type == POWER_SUPPLY_TYPE_USB_FLOAT) {
-		if (!mA)
+	if (psy_type == POWER_SUPPLY_TYPE_USB_FLOAT ||
+		(psy_type == POWER_SUPPLY_TYPE_USB &&
+			motg->enable_sdp_check_timer)) {
+		if (!mA) {
 			pval.intval = -ETIMEDOUT;
-		else
-			pval.intval = 1000 * mA;
-		goto set_prop;
+			goto set_prop;
+		}
 	}
 
 	if (motg->cur_power == mA)
@@ -2775,7 +2784,7 @@ static void check_for_sdp_connection(struct work_struct *w)
 	struct msm_otg *motg = container_of(w, struct msm_otg, sdp_check.work);
 
 	/* Cable disconnected or device enumerated as SDP */
-	if (!motg->vbus_state || motg->phy.otg->gadget->state >=
+	if (!motg->vbus_state || motg->phy.otg->gadget->state >
 							USB_STATE_DEFAULT)
 		return;
 
@@ -2856,13 +2865,18 @@ static void msm_otg_sm_work(struct work_struct *w)
 				break;
 			}
 
-			if (get_psy_type(motg) == POWER_SUPPLY_TYPE_USB_FLOAT)
-				queue_delayed_work(motg->otg_wq,
-				  &motg->sdp_check,
-				  msecs_to_jiffies(SDP_CHECK_DELAY_MS));
-
 			pm_runtime_get_sync(otg->usb_phy->dev);
 			msm_otg_start_peripheral(otg, 1);
+			if (get_psy_type(motg) == POWER_SUPPLY_TYPE_USB_FLOAT ||
+				(get_psy_type(motg) == POWER_SUPPLY_TYPE_USB &&
+				motg->enable_sdp_check_timer)) {
+				queue_delayed_work(motg->otg_wq,
+					&motg->sdp_check,
+					msecs_to_jiffies(
+					(phy->flags & PHY_SOFT_CONNECT) ?
+					SDP_CHECK_DELAY_MS :
+					SDP_CHECK_BOOT_DELAY_MS));
+			}
 			otg->state = OTG_STATE_B_PERIPHERAL;
 		} else {
 			pr_debug("Cable disconnected\n");
@@ -3340,17 +3354,24 @@ static int msm_otg_dpdm_regulator_enable(struct regulator_dev *rdev)
 {
 	int ret = 0;
 	struct msm_otg *motg = rdev_get_drvdata(rdev);
+	struct usb_phy *phy = &motg->phy;
 
 	if (!motg->rm_pulldown) {
+		msm_otg_dbg_log_event(&motg->phy, "Disable Pulldown",
+				      motg->rm_pulldown, 0);
 		ret = msm_hsusb_ldo_enable(motg, USB_PHY_REG_3P3_ON);
-		if (!ret) {
-			motg->rm_pulldown = true;
-			msm_otg_dbg_log_event(&motg->phy, "RM Pulldown",
-					motg->rm_pulldown, 0);
-		}
-	}
+		if (ret)
+			return ret;
 
-	msm_otg_set_mode_nondriving(motg, true);
+		motg->rm_pulldown = true;
+		/* Don't reset h/w if previous disconnect handling is pending */
+		if (phy->otg->state == OTG_STATE_B_IDLE ||
+		    phy->otg->state == OTG_STATE_UNDEFINED)
+			msm_otg_set_mode_nondriving(motg, true);
+		else
+			msm_otg_dbg_log_event(&motg->phy, "NonDrv err",
+					      motg->rm_pulldown, 0);
+	}
 
 	return ret;
 }
@@ -3359,16 +3380,21 @@ static int msm_otg_dpdm_regulator_disable(struct regulator_dev *rdev)
 {
 	int ret = 0;
 	struct msm_otg *motg = rdev_get_drvdata(rdev);
-
-	msm_otg_set_mode_nondriving(motg, false);
+	struct usb_phy *phy = &motg->phy;
 
 	if (motg->rm_pulldown) {
+		/* Let sm_work handle it if USB core is active */
+		if (phy->otg->state == OTG_STATE_B_IDLE ||
+		    phy->otg->state == OTG_STATE_UNDEFINED)
+			msm_otg_set_mode_nondriving(motg, false);
+
 		ret = msm_hsusb_ldo_enable(motg, USB_PHY_REG_3P3_OFF);
-		if (!ret) {
-			motg->rm_pulldown = false;
-			msm_otg_dbg_log_event(&motg->phy, "RM Pulldown",
-					motg->rm_pulldown, 0);
-		}
+		if (ret)
+			return ret;
+
+		motg->rm_pulldown = false;
+		msm_otg_dbg_log_event(&motg->phy, "EN Pulldown",
+				      motg->rm_pulldown, 0);
 	}
 
 	return ret;
@@ -4104,6 +4130,9 @@ static int msm_otg_probe(struct platform_device *pdev)
 	of_property_read_u32(pdev->dev.of_node, "qcom,pm-qos-latency",
 				&motg->pm_qos_latency);
 
+	motg->enable_sdp_check_timer = of_property_read_bool(pdev->dev.of_node,
+				"qcom,enumeration-check-for-sdp");
+
 	pdata = msm_otg_dt_to_pdata(pdev);
 	if (!pdata) {
 		ret = -ENOMEM;
@@ -4149,6 +4178,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 	motg->pdev = pdev;
 	motg->dbg_idx = 0;
 	motg->dbg_lock = __RW_LOCK_UNLOCKED(lck);
+	mutex_init(&motg->lock);
 
 	if (motg->pdata->bus_scale_table) {
 		motg->bus_perf_client =

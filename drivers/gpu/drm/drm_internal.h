@@ -29,6 +29,8 @@ extern unsigned int drm_timestamp_monotonic;
 
 /* drm_fops.c */
 extern struct mutex drm_global_mutex;
+struct drm_file *drm_file_alloc(struct drm_minor *minor);
+void drm_file_free(struct drm_file *file);
 void drm_lastclose(struct drm_device *dev);
 
 /* drm_pci.c */
@@ -68,7 +70,8 @@ int drm_dropmaster_ioctl(struct drm_device *dev, void *data,
 			 struct drm_file *file_priv);
 int drm_master_open(struct drm_file *file_priv);
 void drm_master_release(struct drm_file *file_priv);
-
+bool drm_master_internal_acquire(struct drm_device *dev);
+void drm_master_internal_release(struct drm_device *dev);
 /* drm_sysfs.c */
 extern struct class *drm_class;
 
@@ -92,6 +95,13 @@ int drm_gem_open_ioctl(struct drm_device *dev, void *data,
 		       struct drm_file *file_priv);
 void drm_gem_open(struct drm_device *dev, struct drm_file *file_private);
 void drm_gem_release(struct drm_device *dev, struct drm_file *file_private);
+
+int dsi_display_set_hbm_mode(struct drm_connector *connector, int level);
+int dsi_display_get_hbm_mode(struct drm_connector *connector);
+int dsi_display_set_aod_mode(struct drm_connector *connector, int level);
+int dsi_display_get_aod_mode(struct drm_connector *connector);
+int dsi_display_set_fp_hbm_mode(struct drm_connector *connector, int level);
+int dsi_display_get_fp_hbm_mode(struct drm_connector *connector);
 
 /* drm_debugfs.c */
 #if defined(CONFIG_DEBUG_FS)

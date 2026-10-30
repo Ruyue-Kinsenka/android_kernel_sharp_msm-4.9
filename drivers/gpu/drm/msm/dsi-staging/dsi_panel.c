@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -278,6 +278,103 @@ static int dsi_panel_vreg_put(struct dsi_panel *panel)
 	return rc;
 }
 
+static int dsi_panel_exd_gpio_request(struct dsi_panel *panel)
+{
+	int rc = 0;
+	struct dsi_panel_exd_config *e_config = &panel->exd_config;
+
+	if (!e_config->display_1p8_en && !e_config->led_5v_en &&
+		!e_config->led_en1 && !e_config->led_en2 &&
+		!e_config->oenab && !e_config->selab &&
+		!e_config->switch_power)
+		return 0;
+
+	if (gpio_is_valid(e_config->display_1p8_en)) {
+		rc = gpio_request(e_config->display_1p8_en, "display_1p8_en");
+		if (rc) {
+			pr_err("request for display_1p8_en failed, rc=%d\n",
+				rc);
+			goto error;
+		}
+	}
+
+	if (gpio_is_valid(e_config->led_5v_en)) {
+		rc = gpio_request(e_config->led_5v_en, "led_5v_en");
+		if (rc) {
+			pr_err("request for led_5v_en failed, rc=%d\n",
+				rc);
+			goto error_release_1p8;
+		}
+	}
+
+	if (gpio_is_valid(e_config->led_en1)) {
+		rc = gpio_request(e_config->led_en1, "led_en1");
+		if (rc) {
+			pr_err("request for led_en1 failed, rc=%d\n",
+				rc);
+			goto error_release_5v;
+		}
+	}
+
+	if (gpio_is_valid(e_config->led_en2)) {
+		rc = gpio_request(e_config->led_en2, "led_en2");
+		if (rc) {
+			pr_err("request for led_en2 failed, rc=%d\n",
+				rc);
+			goto error_release_led;
+		}
+	}
+
+	if (gpio_is_valid(e_config->oenab)) {
+		rc = gpio_request(e_config->oenab, "oenab");
+		if (rc) {
+			pr_err("request for oenab failed, rc=%d\n",
+				rc);
+			goto error_release_led2;
+		}
+	}
+
+	if (gpio_is_valid(e_config->selab)) {
+		rc = gpio_request(e_config->selab, "selab");
+		if (rc) {
+			pr_err("request for selab failed, rc=%d\n",
+				rc);
+			goto error_release_oenab;
+		}
+	}
+
+	if (gpio_is_valid(e_config->switch_power)) {
+		rc = gpio_request(e_config->switch_power, "switch_power");
+		if (rc) {
+			pr_err("request for switch_power failed, rc=%d\n",
+				rc);
+			goto error_release_selab;
+		}
+	}
+	return rc;
+
+error_release_selab:
+	if (gpio_is_valid(e_config->selab))
+		gpio_free(e_config->selab);
+error_release_oenab:
+	if (gpio_is_valid(e_config->oenab))
+		gpio_free(e_config->oenab);
+error_release_led2:
+	if (gpio_is_valid(e_config->led_en2))
+		gpio_free(e_config->led_en2);
+error_release_led:
+	if (gpio_is_valid(e_config->led_en1))
+		gpio_free(e_config->led_en1);
+error_release_5v:
+	if (gpio_is_valid(e_config->led_5v_en))
+		gpio_free(e_config->led_5v_en);
+error_release_1p8:
+	if (gpio_is_valid(e_config->display_1p8_en))
+		gpio_free(e_config->display_1p8_en);
+error:
+	return rc;
+}
+
 static int dsi_panel_gpio_request(struct dsi_panel *panel)
 {
 	int rc = 0;
@@ -342,6 +439,34 @@ error_release_reset:
 		gpio_free(r_config->reset_gpio);
 error:
 	return rc;
+}
+
+static int dsi_panel_exd_gpio_release(struct dsi_panel *panel)
+{
+	struct dsi_panel_exd_config *e_config = &panel->exd_config;
+
+	if (!e_config->display_1p8_en && !e_config->led_5v_en &&
+		!e_config->led_en1 && !e_config->led_en2 &&
+		!e_config->oenab && !e_config->selab &&
+		!e_config->switch_power)
+		return 0;
+
+	if (gpio_is_valid(e_config->display_1p8_en))
+		gpio_free(e_config->display_1p8_en);
+	if (gpio_is_valid(e_config->led_5v_en))
+		gpio_free(e_config->led_5v_en);
+	if (gpio_is_valid(e_config->led_en1))
+		gpio_free(e_config->led_en1);
+	if (gpio_is_valid(e_config->led_en2))
+		gpio_free(e_config->led_en2);
+	if (gpio_is_valid(e_config->oenab))
+		gpio_free(e_config->oenab);
+	if (gpio_is_valid(e_config->selab))
+		gpio_free(e_config->selab);
+	if (gpio_is_valid(e_config->switch_power))
+		gpio_free(e_config->switch_power);
+
+	return 0;
 }
 
 static int dsi_panel_gpio_release(struct dsi_panel *panel)
@@ -515,6 +640,110 @@ error:
 	return rc;
 }
 
+static int dsi_panel_exd_enable(struct dsi_panel *panel)
+{
+	int rc = 0;
+	struct dsi_panel_exd_config *e_config = &panel->exd_config;
+
+	if (!e_config->display_1p8_en && !e_config->led_5v_en &&
+			!e_config->led_en1 && !e_config->led_en2 &&
+			!e_config->oenab && !e_config->selab &&
+			!e_config->switch_power)
+		return 0;
+
+	if (gpio_is_valid(e_config->display_1p8_en)) {
+		rc = gpio_direction_output(e_config->display_1p8_en, 0);
+		if (rc) {
+			pr_err("unable to set dir for disp_1p8_en rc:%d\n",
+				rc);
+			goto exit;
+		}
+		gpio_set_value(e_config->display_1p8_en, 1);
+	}
+
+	if (gpio_is_valid(e_config->switch_power)) {
+		rc = gpio_direction_output(e_config->switch_power, 0);
+		if (rc) {
+			pr_err("unable to set dir for switch_power rc:%d\n",
+				rc);
+			goto exit;
+		}
+		gpio_set_value(e_config->switch_power, 1);
+	}
+
+	if (gpio_is_valid(e_config->led_5v_en)) {
+		rc = gpio_direction_output(e_config->led_5v_en, 0);
+		if (rc) {
+			pr_err("unable to set dir for led_5v_en rc:%d\n", rc);
+			goto exit;
+		}
+		gpio_set_value(e_config->led_5v_en, 1);
+	}
+
+	if (gpio_is_valid(e_config->led_en1)) {
+		rc = gpio_direction_output(e_config->led_en1, 0);
+		if (rc) {
+			pr_err("unable to set dir for led_en1 rc:%d\n", rc);
+			goto exit;
+		}
+		gpio_set_value(e_config->led_en1, 1);
+	}
+
+	if (gpio_is_valid(e_config->led_en2)) {
+		rc = gpio_direction_output(e_config->led_en2, 0);
+		if (rc) {
+			pr_err("unable to set dir for led_en2 rc:%d\n", rc);
+			goto exit;
+		}
+		gpio_set_value(e_config->led_en2, 1);
+	}
+
+	if (gpio_is_valid(e_config->oenab)) {
+		rc = gpio_direction_output(e_config->oenab, 0);
+		if (rc) {
+			pr_err("unable to set dir for oenab rc:%d\n", rc);
+			goto exit;
+		}
+		gpio_set_value(e_config->oenab, 0);
+	}
+
+	if (gpio_is_valid(e_config->selab)) {
+		rc = gpio_direction_output(e_config->selab, 0);
+		if (rc) {
+			pr_err("unable to set dir for selab rc:%d\n", rc);
+			goto exit;
+		}
+		gpio_set_value(e_config->selab, 1);
+	}
+exit:
+	return rc;
+}
+
+static void dsi_panel_exd_disable(struct dsi_panel *panel)
+{
+	struct dsi_panel_exd_config *e_config = &panel->exd_config;
+
+	if (!e_config->display_1p8_en && !e_config->led_5v_en &&
+		!e_config->led_en1 && !e_config->led_en2 &&
+		!e_config->oenab && !e_config->selab &&
+		!e_config->switch_power)
+		return;
+
+	if (gpio_is_valid(e_config->display_1p8_en))
+		gpio_set_value(e_config->display_1p8_en, 0);
+	if (gpio_is_valid(e_config->led_5v_en))
+		gpio_set_value(e_config->led_5v_en, 0);
+	if (gpio_is_valid(e_config->led_en1))
+		gpio_set_value(e_config->led_en1, 0);
+	if (gpio_is_valid(e_config->led_en2))
+		gpio_set_value(e_config->led_en2, 0);
+	if (gpio_is_valid(e_config->oenab))
+		gpio_set_value(e_config->oenab, 1);
+	if (gpio_is_valid(e_config->selab))
+		gpio_set_value(e_config->selab, 0);
+	if (gpio_is_valid(e_config->switch_power))
+		gpio_set_value(e_config->switch_power, 0);
+}
 
 static int dsi_panel_power_on(struct dsi_panel *panel)
 {
@@ -546,6 +775,13 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 	}
 #endif /* CONFIG_SHARP_DISPLAY */
 
+	rc = dsi_panel_exd_enable(panel);
+	if (rc) {
+		pr_err("[%s] failed to reset panel, rc=%d\n", panel->name, rc);
+		dsi_panel_exd_disable(panel);
+		goto error_disable_gpio;
+	}
+
 	goto exit;
 
 error_disable_gpio:
@@ -575,6 +811,8 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 		       rc);
 	}
 #endif /* CONFIG_SHARP_DISPLAY */
+	dsi_panel_exd_disable(panel);
+
 	if (gpio_is_valid(panel->reset_config.disp_en_gpio))
 		gpio_set_value(panel->reset_config.disp_en_gpio, 0);
 
@@ -620,7 +858,7 @@ static int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
 	state = mode->priv_info->cmd_sets[type].state;
 
 	if (count == 0) {
-		pr_debug("[%s] No commands to be sent for state(%d)\n",
+		pr_err("[%s] No commands to be sent for state(%d)\n",
 			 panel->name, type);
 		goto error;
 	}
@@ -732,7 +970,11 @@ static int dsi_panel_led_bl_register(struct dsi_panel *panel,
 }
 #endif
 
-static int dsi_panel_update_backlight(struct dsi_panel *panel,
+extern int op_dimlayer_bl_alpha;
+extern int op_dimlayer_bl_enabled;
+bool HBM_flag;
+
+int dsi_panel_update_backlight(struct dsi_panel *panel,
 	u32 bl_lvl)
 {
 	int rc = 0;
@@ -749,6 +991,18 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	bl_lvl = dsi_panel_brightness_to_bl(bl_lvl, &panel->linear_params);
 #endif /* CONFIG_SHARP_DISPLAY */
 	rc = mipi_dsi_dcs_set_display_brightness(dsi, bl_lvl);
+	if (op_dimlayer_bl_enabled) {
+		bl_lvl = op_dimlayer_bl_alpha;
+	}
+
+	if (panel->bl_config.bl_high2bit) {
+		if (HBM_flag == true)
+			return 0;
+
+		rc = mipi_dsi_dcs_set_display_brightness_samsung(dsi, bl_lvl);
+	} else {
+		rc = mipi_dsi_dcs_set_display_brightness(dsi, bl_lvl);
+	}
 	if (rc < 0)
 		pr_err("failed to update dcs backlight:%d\n", bl_lvl);
 
@@ -769,6 +1023,7 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 		led_trigger_event(bl->wled, bl_lvl);
 		break;
 	case DSI_BACKLIGHT_DCS:
+		panel->hbm_backlight = bl_lvl;
 		rc = dsi_panel_update_backlight(panel, bl_lvl);
 		break;
 	default:
@@ -1629,6 +1884,25 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"ROI not parsed from DTSI, generated dynamically",
 	"qcom,mdss-dsi-timing-switch-command",
 	"qcom,mdss-dsi-post-mode-switch-on-command",
+	"qcom,mdss-dsi-panel-hbm-off-command",
+	"qcom,mdss-dsi-panel-hbm-on-command",
+	"qcom,mdss-dsi-panel-hbm-on-command",
+	"qcom,mdss-dsi-panel-hbm-on-command-2",
+	"qcom,mdss-dsi-panel-hbm-on-command-3",
+	"qcom,mdss-dsi-panel-hbm-on-command-4",
+	"qcom,mdss-dsi-panel-hbm-on-command-5",
+	"qcom,mdss-dsi-panel-hbm-max-brightness-command-on",
+	"qcom,mdss-dsi-panel-display-srgb-color-mode-on-command",
+	"qcom,mdss-dsi-panel-display-p3-mode-on-command",
+	"qcom,mdss-dsi-panel-display-wide-color-mode-on-command",
+	"qcom,mdss-dsi-panel-dci-p3-off-command", // also disables SRGB and wide color modes
+	"qcom,mdss-dsi-panel-aod-on-command-1",
+	"qcom,mdss-dsi-panel-aod-on-command-2",
+	"qcom,mdss-dsi-panel-aod-off-command",
+	"qcom,mdss-dsi-panel-aod-off-hbm-on-command",
+	"qcom,mdss-dsi-panel-hbm-off-aod-on-command",
+	"qcom,mdss-dsi-panel-aod-off-samsung-command",
+	"qcom,mdss-dsi-panel-aod-off-new-command",
 };
 
 const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
@@ -1653,6 +1927,25 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"ROI not parsed from DTSI, generated dynamically",
 	"qcom,mdss-dsi-timing-switch-command-state",
 	"qcom,mdss-dsi-post-mode-switch-on-command-state",
+	"qcom,mdss-dsi-hbm-off-command-state",
+	"qcom,mdss-dsi-hbm-on-command-state",
+	"qcom,mdss-dsi-hbm-on-command-state",
+	"qcom,mdss-dsi-hbm-on-command-state",
+	"qcom,mdss-dsi-hbm-on-command-state",
+	"qcom,mdss-dsi-hbm-on-command-state",
+	"qcom,mdss-dsi-panel-hbm-max-brightness-command-on-state",
+	"qcom,mdss-dsi-panel-display-srgb-color-mode-on-command-state",
+	"qcom,mdss-dsi-panel-display-p3-mode-on-command-state",
+	"qcom,mdss-dsi-panel-display-wide-color-mode-on-command-state",
+	"qcom,mdss-dsi-panel-dci-p3-off-command-state",
+	"qcom,mdss-dsi-hbm-on-command-state",
+	"qcom,mdss-dsi-aod-on-command-state",
+	"qcom,mdss-dsi-aod-on-command-state",
+	"qcom,mdss-dsi-aod-off-command-state",
+	"qcom,mdss-dsi-panel-aod-off-hbm-on-command-state",
+	"qcom,mdss-dsi-panel-hbm-off-aod-on-command-state",
+	"qcom,mdss-dsi-panel-aod-off-samsung-command-state",
+	"qcom,mdss-dsi-panel-aod-off-new-command-state",
 };
 
 static int dsi_panel_get_cmd_pkt_count(const char *data, u32 length, u32 *cnt)
@@ -2006,6 +2299,63 @@ error:
 	return rc;
 }
 
+static int dsi_panel_exd_parse_gpios(struct dsi_panel *panel,
+				 struct device_node *of_node)
+{
+	int rc = 0;
+	struct dsi_panel_exd_config *e_config = &panel->exd_config;
+
+	e_config->display_1p8_en = of_get_named_gpio(of_node,
+			"qcom,1p8-en-gpio", 0);
+	if (!e_config->display_1p8_en) {
+		pr_debug("%s qcom,display-1p8-en-gpio not found\n", __func__);
+		return -EINVAL;
+	}
+
+	e_config->led_5v_en = of_get_named_gpio(of_node,
+				"qcom,led-5v-en-gpio", 0);
+	if (!e_config->led_5v_en) {
+		pr_debug("%s qcom,led-5v-en-gpio not found\n", __func__);
+		return -EINVAL;
+	}
+
+	e_config->led_en1 = of_get_named_gpio(of_node,
+				"qcom,led-driver-en1-gpio", 0);
+	if (!e_config->led_en1) {
+		pr_debug("%s qcom,led-driver-en1-gpio not found\n", __func__);
+		return -EINVAL;
+	}
+
+	e_config->led_en2 = of_get_named_gpio(of_node,
+				"qcom,led-driver-en2-gpio", 0);
+	if (!e_config->led_en2) {
+		pr_debug("%s qcom,led-driver-en2-gpio not found\n", __func__);
+		return -EINVAL;
+	}
+
+	e_config->oenab = of_get_named_gpio(of_node,
+				"qcom,oenab-gpio", 0);
+	if (!e_config->oenab) {
+		pr_debug("%s qcom,oenab-gpio not found\n", __func__);
+		return -EINVAL;
+	}
+
+	e_config->selab = of_get_named_gpio(of_node,
+				"qcom,selab-gpio", 0);
+	if (!e_config->selab) {
+		pr_debug("%s qcom,selab-gpio not found\n", __func__);
+		return -EINVAL;
+	}
+
+	e_config->switch_power = of_get_named_gpio(of_node,
+				"qcom,switch-power-gpio", 0);
+	if (!e_config->switch_power) {
+		pr_debug("%s qcom,switch_power not found\n", __func__);
+		return -EINVAL;
+	}
+	return rc;
+}
+
 static int dsi_panel_parse_gpios(struct dsi_panel *panel,
 				 struct device_node *of_node)
 {
@@ -2064,6 +2414,12 @@ static int dsi_panel_parse_gpios(struct dsi_panel *panel,
 		/* Set default mode as SPLIT mode */
 		panel->reset_config.mode_sel_state = MODE_SEL_DUAL_PORT;
 	}
+
+	/* Extended display panel gpios parsed */
+	rc = dsi_panel_exd_parse_gpios(panel, of_node);
+	if (rc && rc != -EINVAL)
+		pr_err("[%s] failed to parse gpios, rc=%d\n",
+				panel->name, rc);
 
 	/* TODO:  release memory */
 	rc = dsi_panel_parse_reset_sequence(panel, of_node);
@@ -3164,6 +3520,22 @@ error:
 	return rc;
 }
 
+static int dsi_panel_parse_oem_config(struct dsi_panel *panel,
+				     struct device_node *of_node)
+{
+	panel->lp11_init = of_property_read_bool(of_node,
+		"qcom,mdss-dsi-lp11-init");
+	if (panel->lp11_init)
+		pr_debug("lp11_init: %d\n", panel->lp11_init);
+
+	panel->bl_config.bl_high2bit = of_property_read_bool(of_node,
+		"qcom,mdss-bl-high2bit");
+	if (panel->bl_config.bl_high2bit)
+		pr_debug("bl_high2bit: %d\n", panel->bl_config.bl_high2bit);
+
+	return 0;
+}
+
 struct dsi_panel *dsi_panel_get(struct device *parent,
 				struct device_node *of_node,
 				int topology_override,
@@ -3274,6 +3646,9 @@ struct dsi_panel *dsi_panel_get(struct device *parent,
 	if (rc)
 		pr_err("failed to mfr params, rc=%d\n", rc);
 #endif /* CONFIG_SHARP_DISPLAY */
+	rc = dsi_panel_parse_oem_config(panel, of_node);
+	if (rc)
+		pr_debug("failed to get oem config, rc=%d\n", rc);
 
 	panel->panel_of_node = of_node;
 	drm_panel_init(&panel->drm_panel);
@@ -3358,8 +3733,17 @@ int dsi_panel_drv_init(struct dsi_panel *panel,
 	}
 #endif /* CONFIG_SHARP_DISPLAY */
 
+	rc = dsi_panel_exd_gpio_request(panel);
+	if (rc) {
+		pr_err("[%s] failed to request gpios, rc=%d\n", panel->name,
+				rc);
+		goto error_exd_gpio_release;
+	}
+
 	goto exit;
 
+error_exd_gpio_release:
+	(void)dsi_panel_exd_gpio_release(panel);
 error_gpio_release:
 	(void)dsi_panel_gpio_release(panel);
 error_pinctrl_deinit:
@@ -3406,6 +3790,11 @@ int dsi_panel_drv_deinit(struct dsi_panel *panel)
 	if (rc)
 		pr_err("[%s] failed to release gpios, rc=%d\n", panel->name,
 		       rc);
+
+	rc = dsi_panel_exd_gpio_release(panel);
+	if (rc)
+		pr_err("[%s] failed to release gpios, rc=%d\n", panel->name,
+			rc);
 
 	rc = dsi_panel_pinctrl_deinit(panel);
 	if (rc)
@@ -3740,6 +4129,7 @@ error:
 	return rc;
 }
 
+extern int oneplus_panel_status;
 int dsi_panel_set_lp1(struct dsi_panel *panel)
 {
 	int rc = 0;
@@ -3757,6 +4147,7 @@ int dsi_panel_set_lp1(struct dsi_panel *panel)
 	if (rc)
 		pr_err("[%s] failed to send DSI_CMD_SET_LP1 cmd, rc=%d\n",
 		       panel->name, rc);
+	oneplus_panel_status = 3; // DISPLAY_POWER_DOZE
 	mutex_unlock(&panel->panel_lock);
 	return rc;
 }
@@ -3778,6 +4169,7 @@ int dsi_panel_set_lp2(struct dsi_panel *panel)
 	if (rc)
 		pr_err("[%s] failed to send DSI_CMD_SET_LP2 cmd, rc=%d\n",
 		       panel->name, rc);
+	oneplus_panel_status = 4; // DISPLAY_POWER_DOZE_SUSPEND
 	mutex_unlock(&panel->panel_lock);
 	return rc;
 }
@@ -3799,6 +4191,7 @@ int dsi_panel_set_nolp(struct dsi_panel *panel)
 	if (rc)
 		pr_err("[%s] failed to send DSI_CMD_SET_NOLP cmd, rc=%d\n",
 		       panel->name, rc);
+	oneplus_panel_status = 2; // DISPLAY_POWER_ON
 	mutex_unlock(&panel->panel_lock);
 	return rc;
 }
@@ -4011,6 +4404,12 @@ int dsi_panel_post_switch(struct dsi_panel *panel)
 	return rc;
 }
 
+extern bool oneplus_dimlayer_hbm_enable;
+extern bool backup_dimlayer_hbm;
+extern int oneplus_auth_status;
+extern int oneplus_dim_status;
+extern int backup_dim_status;
+
 int dsi_panel_enable(struct dsi_panel *panel)
 {
 	int rc = 0;
@@ -4031,6 +4430,23 @@ int dsi_panel_enable(struct dsi_panel *panel)
 		       panel->name, rc);
 	}
 	panel->panel_initialized = true;
+
+	oneplus_panel_status = 2; // DISPLAY_POWER_ON
+
+	if (oneplus_auth_status == 2) {
+		backup_dimlayer_hbm = 0;
+		backup_dim_status = 0;
+	} else if (oneplus_auth_status == 1) {
+		backup_dimlayer_hbm = 1;
+		backup_dim_status = 1;
+	}
+
+	oneplus_dimlayer_hbm_enable = backup_dimlayer_hbm;
+	oneplus_dim_status = backup_dim_status;
+	if (oneplus_auth_status != 2)
+		pr_err("Restore dim when panel goes on");
+	oneplus_auth_status = 0;
+
 	mutex_unlock(&panel->panel_lock);
 #ifdef CONFIG_SHARP_DISPLAY /* CUST_ID_00067 */
 	panel->mfr_idx = -1;
@@ -4043,6 +4459,27 @@ int dsi_panel_enable(struct dsi_panel *panel)
 	drm_voltage_control_panel_enable();
 #endif /* CONFIG_ARCH_JOHNNY */
 #endif /* CONFIG_SHARP_DISPLAY */
+
+	dsi_panel_init_display_modes(panel);
+
+	return rc;
+}
+
+int dsi_panel_init_display_modes(struct dsi_panel *panel)
+{
+	int rc;
+
+	if (panel->hbm_mode)
+		dsi_panel_apply_hbm_mode(panel);
+	dsi_panel_apply_display_mode(panel);
+	if (panel->aod_mode == 2) {
+		rc = dsi_panel_set_aod_mode(panel, 2);
+		panel->aod_status = 1;
+	} else if (panel->aod_mode == 0) {
+		rc = dsi_panel_set_aod_mode(panel, 0);
+		panel->aod_status = 0;
+	}
+
 	return rc;
 }
 
@@ -4114,10 +4551,23 @@ int dsi_panel_disable(struct dsi_panel *panel)
 	if (panel->type == EXT_BRIDGE)
 		return 0;
 
+	panel->panel_initialized = false;
+
 	mutex_lock(&panel->panel_lock);
+
+	if (panel->aod_mode == 2)
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_AOD_OFF_SAMSUNG);
 
 	/* Avoid sending panel off commands when ESD recovery is underway */
 	if (!atomic_read(&panel->esd_recovery_pending)) {
+		oneplus_dimlayer_hbm_enable = false;
+		oneplus_dim_status = 0;
+		pr_err("Kill dim when panel goes off");
+
+		if (panel->aod_mode == 2)
+			panel->aod_status = 1;
+		else if (panel->aod_mode == 0)
+			panel->aod_status = 0;
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_OFF);
 		if (rc) {
 			pr_err("[%s] failed to send DSI_CMD_SET_OFF cmds, rc=%d\n",
@@ -4125,6 +4575,7 @@ int dsi_panel_disable(struct dsi_panel *panel)
 			goto error;
 		}
 	}
+	oneplus_panel_status = 0; // DISPLAY_POWER_OFF
 	panel->panel_initialized = false;
 
 error:
@@ -4555,3 +5006,116 @@ error:
 	return -EINVAL;
 }
 #endif /* CONFIG_SHARP_DISPLAY */
+
+int dsi_panel_apply_hbm_mode(struct dsi_panel *panel)
+{
+	static const enum dsi_cmd_set_type type_map[] = {
+		DSI_CMD_SET_HBM_OFF,
+		DSI_CMD_SET_HBM_ON_1,
+		DSI_CMD_SET_HBM_ON_2,
+		DSI_CMD_SET_HBM_ON_3,
+		DSI_CMD_SET_HBM_ON_4,
+		DSI_CMD_SET_HBM_ON_5,
+		DSI_CMD_SET_HBM_ON_6,
+	};
+
+	enum dsi_cmd_set_type type;
+	int rc;
+
+	if (panel->hbm_mode >= 0 && panel->hbm_mode < ARRAY_SIZE(type_map))
+		type = type_map[panel->hbm_mode];
+	else
+		type = DSI_CMD_SET_HBM_OFF;
+
+	mutex_lock(&panel->panel_lock);
+	rc = dsi_panel_tx_cmd_set(panel, type);
+	mutex_unlock(&panel->panel_lock);
+
+	return rc;
+}
+
+int dsi_panel_apply_display_mode_locked(struct dsi_panel *panel)
+{
+	enum dsi_cmd_set_type type;
+	int rc;
+
+	switch (panel->display_mode) {
+		case DISPLAY_MODE_SRGB: type = DSI_CMD_SET_MODE_SRGB; break;
+		case DISPLAY_MODE_DCI_P3: type = DSI_CMD_SET_MODE_DCI_P3; break;
+		case DISPLAY_MODE_WIDE_COLOR: type = DSI_CMD_SET_MODE_WIDE_COLOR; break;
+		default: type = DSI_CMD_SET_MODE_DEFAULT; break;
+	}
+
+	rc = dsi_panel_tx_cmd_set(panel, type);
+
+	return rc;
+}
+
+int dsi_panel_apply_display_mode(struct dsi_panel *panel)
+{
+	int rc;
+
+	mutex_lock(&panel->panel_lock);
+	rc = dsi_panel_apply_display_mode_locked(panel);
+	mutex_unlock(&panel->panel_lock);
+
+	return rc;
+}
+
+bool aod_real_flag = false;
+bool aod_complete = false;
+
+int dsi_panel_set_aod_mode(struct dsi_panel *panel, int level)
+{
+	int rc = 0;
+	struct dsi_display_mode *mode;
+	if (!panel || !panel->cur_mode) {
+		pr_err("Invalid params\n");
+		return -EINVAL;
+	}
+	if (panel->aod_disable)
+		return 0;
+	mode = panel->cur_mode;
+	if (level == 1) {
+		if (panel->aod_status == 0) {
+			printk(KERN_ERR "send AOD ON commd mode 1 start \n");
+			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_AOD_ON_1);
+			printk(KERN_ERR "send AOD ON commd mode 1 end \n");
+			panel->aod_status = 1;
+		}
+	} else if (level == 2) {
+		if (panel->aod_status == 0) {
+			panel->aod_status = 1;
+			printk(KERN_ERR "send AOD ON commd mode 2 start \n");
+			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_AOD_ON_2);
+			aod_real_flag = false;
+			aod_complete = true;
+			printk(KERN_ERR "send AOD ON commd mode 2 end   \n");
+
+		}
+	} else {
+		if (panel->aod_status) {
+			panel->aod_status = 0;
+			printk(KERN_ERR "send AOD OFF commd start \n");
+			if (aod_real_flag) {
+				printk(KERN_ERR "send DSI_CMD_SET_AOD_OFF \n");
+				rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_AOD_OFF);
+			}
+			if (!aod_real_flag) {
+				printk(KERN_ERR "send DSI_CMD_SET_AOD_OFF_NEW \n");
+				rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_AOD_OFF_NEW);
+				rc = dsi_panel_update_backlight(panel,panel->bl_config.bl_level);
+			}
+			if (panel->display_mode != DISPLAY_MODE_DEFAULT)
+				dsi_panel_apply_display_mode(panel);
+
+			printk(KERN_ERR "send AOD OFF commd end \n");
+			aod_complete = false;
+		}
+	}
+	oneplus_panel_status = 0; // DISPLAY_POWER_OFF
+
+	panel->aod_curr_mode = level;
+	pr_err("AOD MODE = %d\n", level);
+return rc;
+}

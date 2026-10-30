@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2006-2007 Adam Belay <abelay@novell.com>
  * Copyright (C) 2009 Intel Corporation
  *
@@ -138,6 +138,12 @@ module_param_named(
 	sh_debug_mask, sh_pm_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
 );
 #endif /* CONFIG_SHARP_PNP_SLEEP_DEBUG */
+
+void msm_cpuidle_set_sleep_disable(bool disable)
+{
+	sleep_disabled = disable;
+	pr_info("%s:sleep_disabled=%d\n", __func__, disable);
+}
 
 /**
  * msm_cpuidle_get_deep_idle_latency - Get deep idle latency value
@@ -1325,7 +1331,7 @@ static bool psci_enter_sleep(struct lpm_cpu *cpu, int idx, bool from_idle)
 
 	if (!idx) {
 		stop_critical_timings();
-		wfi();
+		cpu_do_idle();
 		start_critical_timings();
 		return 1;
 	}

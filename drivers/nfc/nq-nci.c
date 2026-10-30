@@ -28,6 +28,7 @@
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
+#include <linux/project_info.h>
 
 struct nqx_platform_data {
 	unsigned int irq_gpio;
@@ -746,10 +747,18 @@ static int nfcc_hw_check(struct i2c_client *client, struct nqx_dev *nqx_dev)
 				nci_get_version_rsp[3];
 			nqx_dev->nqx_info.info.rom_version =
 				nci_get_version_rsp[4];
-			nqx_dev->nqx_info.info.fw_minor =
-				nci_get_version_rsp[10];
-			nqx_dev->nqx_info.info.fw_major =
-				nci_get_version_rsp[11];
+			if ((nci_get_version_rsp[3] == NFCC_SN100_A)
+				|| (nci_get_version_rsp[3] == NFCC_SN100_B)) {
+				nqx_dev->nqx_info.info.fw_minor =
+					nci_get_version_rsp[6];
+				nqx_dev->nqx_info.info.fw_major =
+					nci_get_version_rsp[7];
+			} else {
+				nqx_dev->nqx_info.info.fw_minor =
+					nci_get_version_rsp[10];
+				nqx_dev->nqx_info.info.fw_major =
+					nci_get_version_rsp[11];
+			}
 		}
 		goto err_nfcc_reset_failed;
 	}
@@ -1210,6 +1219,8 @@ static int nqx_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, nqx_dev);
 	nqx_dev->irq_wake_up = false;
 
+	push_component_info(NFC, "NQ330", "NXP");
+
 	dev_err(&client->dev,
 	"%s: probing NFCC NQxxx exited successfully\n",
 		 __func__);
@@ -1229,7 +1240,7 @@ err_clkreq_gpio:
 	gpio_free(platform_data->clkreq_gpio);
 err_ese_gpio:
 	/* optional gpio, not sure was configured in probe */
-	if (nqx_dev->ese_gpio > 0)
+	if (gpio_is_valid(platform_data->ese_gpio))
 		gpio_free(platform_data->ese_gpio);
 err_firm_gpio:
 	gpio_free(platform_data->firm_gpio);
