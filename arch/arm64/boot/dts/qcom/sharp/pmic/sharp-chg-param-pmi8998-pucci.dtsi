@@ -16,8 +16,58 @@
 /****************************************/
 &pmi8998_charger {
 	qcom,fcc-max-ua = <1750000>;
+	qcom,fv-max-uv = <4350000>;
+	qcom,cutoff-voltage-with-charger = <3250>;
 	/delete-property/ qcom,step-charging-enable;
 	qcom,hvdcp-disable;
+
+	/* ibatmax setting for different temp regions */
+	ibatmax-little-cold-ma = <300>;
+	ibatmax-cool-ma = <500>;
+	ibatmax-little-cool-ma = <750>;
+	ibatmax-little-cool-low_ma = <450>;
+	ibatmax-pre-normal-ma = <750>;
+	ibatmax-normal-ma = <1750>;
+	ibatmax-warm-ma = <1750>;
+
+	/* vbatmax setting for different temp regions */
+	vbatmax-little-cold-mv = <4000>;
+	vbatmax-cool-mv = <4350>;
+	vbatmax-little-cool-mv = <4350>;
+	vbatmax-pre-normal-mv = <4350>;
+	vbatmax-normal-mv = <4350>;
+	vbatmax-warm-mv = <4200>;
+	little-cool-vbat-thr-mv = <4180>;
+
+	/* vbatdet setting for different temp regions */
+	vbatdet-little-cold-mv = <3700>;
+	vbatdet-cool-mv = <4150>;
+	vbatdet-little-cool-mv = <4220>;
+	vbatdet-pre-normal-mv = <4220>;
+	vbatdet-normal-mv = <4220>;
+	vbatdet-warm-mv = <4100>;
+
+	/* temp region settings (decidegc, matches JEITA ranges in
+	 * fg-gen3-batterydata-sharp-845-3rd.dtsi) */
+	cold-bat-decidegc = <0>;
+	little-cold-bat-decidegc = <50>;
+	cool-bat-decidegc = <100>;
+	little-cool-bat-decidegc = <120>;
+	pre-normal-bat-decidegc = <160>;
+	warm-bat-decidegc = <440>;
+	hot-bat-decidegc = <550>;
+
+	/* ffc params (unused without dash hardware) */
+	ffc-pre-normal-decidegc = <160>;
+	ffc-normal-decidegc = <350>;
+	ffc-warm-decidegc = <400>;
+	ffc-normal-fcc-ma = <650>;
+	ffc-warm-fcc-ma = <750>;
+	ffc-normal-cutoff-ma = <550>;
+	ffc-warm-cutoff-ma = <650>;
+	ffc-full-vbat-mv = <4350>;
+
+	op,sw-iterm-ma = <150>;
 };
 
 /****************************************/
