@@ -520,7 +520,7 @@ int get_prop_pre_shutdown_soc(void)
 	int soc_load;
 
 	soc_load = load_soc();
-	if (soc_load == -1)
+	if (soc_load < 0)
 		return 50;
 	else
 		return soc_load;

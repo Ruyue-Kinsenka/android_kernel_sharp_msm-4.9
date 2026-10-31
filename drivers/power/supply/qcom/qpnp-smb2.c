@@ -270,8 +270,6 @@ static int smb2_parse_dt(struct smb2 *chip)
 #ifdef CONFIG_BATTERY_SHARP
 	int temp;
 #endif /* CONFIG_BATTERY_SHARP */
-/* david.liu@bsp, 20171023 Battery & Charging porting */
-	int byte_len, rc = 0;
 	enum of_gpio_flags flags;
 
 	if (!node) {

@@ -5911,7 +5911,7 @@ irqreturn_t smblib_handle_switcher_power_ok(int irq, void *data)
 			 * reset storm data and set the storm threshold
 			 * to 3 for reverse boost detection.
 			 */
-			update_storm_count(wdata, BOOST_BACK_STORM_COUNT);
+			update_storm_count(&irq_data->storm_data, BOOST_BACK_STORM_COUNT);
 #ifdef CONFIG_BATTERY_SHARP
 			vote(chg->usb_icl_votable, BOOST_BACK_VOTER, true, 0);
 			msleep(50);
@@ -9312,8 +9312,6 @@ static int smblib_create_votables(struct smb_charger *chg)
 		rc = PTR_ERR(chg->disable_power_role_switch);
 		return rc;
 	}
-	vote(chg->disable_power_role_switch, DEFAULT_VOTER,
-			chg->ufp_only_mode, 0);
 
 #ifdef CONFIG_BATTERY_SHARP
 	chg->cc_disable_votable = create_votable("CC_DISABLE",
@@ -9325,6 +9323,9 @@ static int smblib_create_votables(struct smb_charger *chg)
 		return rc;
 	}
 #endif /* CONFIG_BATTERY_SHARP */
+
+	vote(chg->disable_power_role_switch, DEFAULT_VOTER,
+			chg->ufp_only_mode, 0);
 
 	return rc;
 }

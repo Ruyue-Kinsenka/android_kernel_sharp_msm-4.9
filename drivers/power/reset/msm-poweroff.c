@@ -304,8 +304,9 @@ int sharp_msm_set_restart_callback(struct sharp_msm_restart_callback *cb)
 	shrlog_cb = cb;
 	if (!shrlog_cb)
 		return 0;
-	if (!restart_reason)
+	if (!restart_reason) {
 		return 0;
+	}
 	if (shrlog_cb->restart_addr_set)
 		(*(shrlog_cb->restart_addr_set))(restart_reason);
 	if (shrlog_cb->preset_reason)
@@ -394,6 +395,13 @@ static void msm_restart_prepare(const char *cmd)
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+
+	/* On panic keep RAM alive via warm reset and boot into recovery so
+	 * the logstore/abootlog dumps can be retrieved afterwards. */
+	if (in_panic) {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_RECOVERY);
+		__raw_writel(0x77665502, restart_reason);
+	}
 
 	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
