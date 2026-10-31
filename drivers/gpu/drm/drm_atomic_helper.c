@@ -2457,12 +2457,12 @@ fail_release_plane2:
 #ifdef CONFIG_SHARP_DISPLAY /* CUST_ID_00038 */
 	primary_state->crtc_w = hdisplay/2;
 	primary_state->crtc_h = vdisplay;
-	if (primary_state->rotation & (DRM_ROTATE_90)) {
+	if (primary_state->rotation & (DRM_MODE_ROTATE_90)) {
 		primary_state->src_x = set->x << 16;
 		primary_state->src_y = set->y << 16;
 		primary_state->src_w = vdisplay << 16;
 		primary_state->src_h = hdisplay << (16-1);
-	} else if (primary_state->rotation & DRM_ROTATE_270) {
+	} else if (primary_state->rotation & DRM_MODE_ROTATE_270) {
 		primary_state->src_x = set->x << 16;
 		primary_state->src_y = (set->y << 16) + (hdisplay << (16-1));
 		primary_state->src_w = vdisplay << 16;
@@ -2495,12 +2495,12 @@ fail_release_plane2:
 	plane_state2->crtc_y = 0;
 	plane_state2->crtc_w = hdisplay/2;
 	plane_state2->crtc_h = vdisplay;
-	if (plane_state2->rotation & DRM_ROTATE_90) {
+	if (plane_state2->rotation & DRM_MODE_ROTATE_90) {
 		plane_state2->src_x = set->x << 16;
 		plane_state2->src_y = (set->y << 16) + (hdisplay << (16-1));
 		plane_state2->src_w = vdisplay << 16;
 		plane_state2->src_h = hdisplay << (16-1);
-	} else if (plane_state2->rotation & DRM_ROTATE_270) {
+	} else if (plane_state2->rotation & DRM_MODE_ROTATE_270) {
 		plane_state2->src_x = set->x << 16;
 		plane_state2->src_y = set->y << 16;
 		plane_state2->src_w = vdisplay << 16;

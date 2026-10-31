@@ -5009,6 +5009,57 @@ error:
 	return ret == 0 ? count : ret;
 }
 
+#ifdef CONFIG_SHARP_DISPLAY /* CUST_ID_00040 */
+static ssize_t sysfs_sharp_base_fps_read(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dsi_display *display = dev_get_drvdata(dev);
+	struct msm_drm_private *priv;
+	int fps = DRM_BASE_FPS_DEFAULT;
+
+	if (display->drm_dev) {
+		priv = display->drm_dev->dev_private;
+		if (priv && priv->fpslow_base > 0)
+			fps = priv->fpslow_base;
+	}
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", fps);
+}
+
+static ssize_t sysfs_sharp_base_fps_write(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct dsi_display *display = dev_get_drvdata(dev);
+	struct msm_drm_private *priv;
+	int fps;
+
+	if (!display->drm_dev)
+		return -ENODEV;
+	priv = display->drm_dev->dev_private;
+	if (!priv)
+		return -ENODEV;
+
+	if (kstrtoint(buf, 10, &fps))
+		return -EINVAL;
+
+	switch (fps) {
+	case DRM_BASE_FPS_30:
+	case DRM_BASE_FPS_60:
+	case DRM_BASE_FPS_100:
+	case DRM_BASE_FPS_120:
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	priv->fpslow_param = fps;
+	priv->fpslow_base = fps;
+	msm_set_fps_low_base(fps);
+
+	return count;
+}
+#endif /* CONFIG_SHARP_DISPLAY */
+
 static DEVICE_ATTR(dynamic_dsi_clock, 0644,
 			sysfs_dynamic_dsi_clk_read,
 			sysfs_dynamic_dsi_clk_write);
@@ -5016,11 +5067,19 @@ static DEVICE_ATTR(hbm, 0644, sysfs_hbm_read, sysfs_hbm_write);
 static DEVICE_ATTR(display_mode, 0644,
 			sysfs_display_mode_read,
 			sysfs_display_mode_write);
+#ifdef CONFIG_SHARP_DISPLAY /* CUST_ID_00040 */
+static DEVICE_ATTR(sharp_base_fps, 0644,
+			sysfs_sharp_base_fps_read,
+			sysfs_sharp_base_fps_write);
+#endif /* CONFIG_SHARP_DISPLAY */
 
 static struct attribute *dsi_sysfs_attrs[] = {
 	&dev_attr_dynamic_dsi_clock.attr,
 	&dev_attr_hbm.attr,
 	&dev_attr_display_mode.attr,
+#ifdef CONFIG_SHARP_DISPLAY /* CUST_ID_00040 */
+	&dev_attr_sharp_base_fps.attr,
+#endif /* CONFIG_SHARP_DISPLAY */
 	NULL,
 };
 static struct attribute_group dsi_sysfs_attrs_group = {

@@ -53,7 +53,7 @@
     #define DRM_BASE_FPS_DEFAULT        DRM_BASE_FPS_60
     #define DRM_BASE_MAX_FPS            DRM_BASE_FPS_60
 #elif defined(CONFIG_ARCH_PUCCI) || defined(FEATURE_SH_DISPLAY_MODEL_PUCCI)
-    #define DRM_BASE_FPS_DEFAULT        DRM_BASE_FPS_60
+    #define DRM_BASE_FPS_DEFAULT        DRM_BASE_FPS_120
     #define DRM_BASE_MAX_FPS            DRM_BASE_FPS_120
 #else
     #define DRM_BASE_FPS_DEFAULT        DRM_BASE_FPS_60
