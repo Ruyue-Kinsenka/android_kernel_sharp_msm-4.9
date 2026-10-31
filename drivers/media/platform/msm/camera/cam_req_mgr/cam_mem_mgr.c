@@ -572,12 +572,11 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 
 		enum cam_smmu_region_id region;
 
-		if (cmd->flags & CAM_MEM_FLAG_HW_READ_WRITE)
-			region = CAM_SMMU_REGION_IO;
-
-
 		if (cmd->flags & CAM_MEM_FLAG_HW_SHARED_ACCESS)
 			region = CAM_SMMU_REGION_SHARED;
+
+		if (cmd->flags & CAM_MEM_FLAG_HW_READ_WRITE)
+			region = CAM_SMMU_REGION_IO;
 
 		rc = cam_mem_util_map_hw_va(cmd->flags,
 			cmd->mmu_hdls,
@@ -774,10 +773,10 @@ static void cam_mem_mgr_unmap_active_buf(int idx)
 {
 	enum cam_smmu_region_id region = CAM_SMMU_REGION_SHARED;
 
-	if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_SHARED_ACCESS)
-		region = CAM_SMMU_REGION_SHARED;
-	else if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_READ_WRITE)
+	if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_READ_WRITE)
 		region = CAM_SMMU_REGION_IO;
+	else if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_SHARED_ACCESS)
+		region = CAM_SMMU_REGION_SHARED;
 
 	cam_mem_util_unmap_hw_va(idx, region, CAM_SMMU_MAPPING_USER);
 }
@@ -865,12 +864,12 @@ static int cam_mem_util_unmap(int32_t idx,
 		if (tbl.bufq[idx].i_hdl && tbl.bufq[idx].kmdvaddr)
 			ion_unmap_kernel(tbl.client, tbl.bufq[idx].i_hdl);
 
-	/* SHARED flag gets precedence, all other flags after it */
-	if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_SHARED_ACCESS) {
-		region = CAM_SMMU_REGION_SHARED;
+	/* HW_READ_WRITE gets precedence, all other flags after it */
+	if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_READ_WRITE) {
+		region = CAM_SMMU_REGION_IO;
 	} else {
-		if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_READ_WRITE)
-			region = CAM_SMMU_REGION_IO;
+		if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_SHARED_ACCESS)
+			region = CAM_SMMU_REGION_SHARED;
 	}
 
 	if ((tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_READ_WRITE) ||
@@ -1019,12 +1018,12 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 		goto smmu_fail;
 	}
 
-	/* SHARED flag gets precedence, all other flags after it */
-	if (inp->flags & CAM_MEM_FLAG_HW_SHARED_ACCESS) {
-		region = CAM_SMMU_REGION_SHARED;
+	/* HW_READ_WRITE gets precedence, all other flags after it */
+	if (inp->flags & CAM_MEM_FLAG_HW_READ_WRITE) {
+		region = CAM_SMMU_REGION_IO;
 	} else {
-		if (inp->flags & CAM_MEM_FLAG_HW_READ_WRITE)
-			region = CAM_SMMU_REGION_IO;
+		if (inp->flags & CAM_MEM_FLAG_HW_SHARED_ACCESS)
+			region = CAM_SMMU_REGION_SHARED;
 	}
 
 	rc = cam_smmu_map_kernel_iova(inp->smmu_hdl,

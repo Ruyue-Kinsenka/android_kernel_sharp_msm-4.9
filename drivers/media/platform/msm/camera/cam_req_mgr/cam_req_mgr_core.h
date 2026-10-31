@@ -408,6 +408,13 @@ int cam_req_mgr_destroy_session(struct cam_req_mgr_session_info *ses_info);
 int cam_req_mgr_link(struct cam_req_mgr_link_info *link_info);
 
 /**
+ * cam_req_mgr_link_v2()
+ * @brief     : creates a link for a session (v2, extended dev hdls)
+ * @link_info : handle and session info to create a link
+ */
+int cam_req_mgr_link_v2(struct cam_req_mgr_link_info_v2 *link_info);
+
+/**
  * cam_req_mgr_unlink()
  * @brief       : destroy a link in a session
  * @unlink_info : session and link handle info

@@ -253,19 +253,27 @@ static long cam_private_ioctl(struct file *file, void *fh,
 
 	k_ioctl = (struct cam_control *)arg;
 
-	if (!k_ioctl->handle)
+	if (!k_ioctl->handle) {
+		CAM_ERR(CAM_CRM, "ioctl no handle, op=0x%x size=%d",
+			k_ioctl->op_code, k_ioctl->size);
 		return -EINVAL;
+	}
+
+	CAM_INFO(CAM_CRM, "ioctl op=0x%x size=%d",
+		k_ioctl->op_code, k_ioctl->size);
+
+	cam_compat_fix_opcode(&k_ioctl->op_code);
 
 	switch (k_ioctl->op_code) {
 	case CAM_REQ_MGR_CREATE_SESSION: {
 		struct cam_req_mgr_session_info ses_info;
 
-		if (k_ioctl->size != sizeof(ses_info))
+		if (k_ioctl->size < sizeof(ses_info))
 			return -EINVAL;
 
 		if (copy_from_user(&ses_info,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(ses_info))) {
 			return -EFAULT;
 		}
 
@@ -273,7 +281,7 @@ static long cam_private_ioctl(struct file *file, void *fh,
 		if (!rc)
 			if (copy_to_user(
 				u64_to_user_ptr(k_ioctl->handle),
-				&ses_info, k_ioctl->size))
+				&ses_info, sizeof(ses_info)))
 				rc = -EFAULT;
 		}
 		break;
@@ -281,12 +289,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_DESTROY_SESSION: {
 		struct cam_req_mgr_session_info ses_info;
 
-		if (k_ioctl->size != sizeof(ses_info))
+		if (k_ioctl->size < sizeof(ses_info))
 			return -EINVAL;
 
 		if (copy_from_user(&ses_info,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(ses_info))) {
 			return -EFAULT;
 		}
 
@@ -297,12 +305,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_LINK: {
 		struct cam_req_mgr_link_info link_info;
 
-		if (k_ioctl->size != sizeof(link_info))
+		if (k_ioctl->size < sizeof(link_info))
 			return -EINVAL;
 
 		if (copy_from_user(&link_info,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(link_info))) {
 			return -EFAULT;
 		}
 
@@ -310,7 +318,28 @@ static long cam_private_ioctl(struct file *file, void *fh,
 		if (!rc)
 			if (copy_to_user(
 				u64_to_user_ptr(k_ioctl->handle),
-				&link_info, k_ioctl->size))
+				&link_info, sizeof(link_info)))
+				rc = -EFAULT;
+		}
+		break;
+
+	case CAM_REQ_MGR_LINK_V2: {
+		struct cam_req_mgr_link_info_v2 link_info;
+
+		if (k_ioctl->size != sizeof(link_info))
+			return -EINVAL;
+
+		if (copy_from_user(&link_info,
+			u64_to_user_ptr(k_ioctl->handle),
+			sizeof(link_info))) {
+			return -EFAULT;
+		}
+
+		rc = cam_req_mgr_link_v2(&link_info);
+		if (!rc)
+			if (copy_to_user(
+				u64_to_user_ptr(k_ioctl->handle),
+				&link_info, sizeof(link_info)))
 				rc = -EFAULT;
 		}
 		break;
@@ -318,12 +347,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_UNLINK: {
 		struct cam_req_mgr_unlink_info unlink_info;
 
-		if (k_ioctl->size != sizeof(unlink_info))
+		if (k_ioctl->size < sizeof(unlink_info))
 			return -EINVAL;
 
 		if (copy_from_user(&unlink_info,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(unlink_info))) {
 			return -EFAULT;
 		}
 
@@ -334,12 +363,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_SCHED_REQ: {
 		struct cam_req_mgr_sched_request sched_req;
 
-		if (k_ioctl->size != sizeof(sched_req))
+		if (k_ioctl->size < sizeof(sched_req))
 			return -EINVAL;
 
 		if (copy_from_user(&sched_req,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(sched_req))) {
 			return -EFAULT;
 		}
 
@@ -350,12 +379,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_FLUSH_REQ: {
 		struct cam_req_mgr_flush_info flush_info;
 
-		if (k_ioctl->size != sizeof(flush_info))
+		if (k_ioctl->size < sizeof(flush_info))
 			return -EINVAL;
 
 		if (copy_from_user(&flush_info,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(flush_info))) {
 			return -EFAULT;
 		}
 
@@ -366,12 +395,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_SYNC_MODE: {
 		struct cam_req_mgr_sync_mode sync_info;
 
-		if (k_ioctl->size != sizeof(sync_info))
+		if (k_ioctl->size < sizeof(sync_info))
 			return -EINVAL;
 
 		if (copy_from_user(&sync_info,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(sync_info))) {
 			return -EFAULT;
 		}
 
@@ -381,21 +410,26 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_ALLOC_BUF: {
 		struct cam_mem_mgr_alloc_cmd cmd;
 
-		if (k_ioctl->size != sizeof(cmd))
+		if (k_ioctl->size < sizeof(cmd))
 			return -EINVAL;
 
 		if (copy_from_user(&cmd,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(cmd))) {
 			rc = -EFAULT;
 			break;
 		}
 
+		CAM_INFO(CAM_CRM,
+			"alloc len=%llu flags=0x%x num_hdl=%u hdl0-3=%x %x %x %x",
+			cmd.len, cmd.flags, cmd.num_hdl,
+			cmd.mmu_hdls[0], cmd.mmu_hdls[1],
+			cmd.mmu_hdls[2], cmd.mmu_hdls[3]);
 		rc = cam_mem_mgr_alloc_and_map(&cmd);
 		if (!rc)
 			if (copy_to_user(
 				u64_to_user_ptr(k_ioctl->handle),
-				&cmd, k_ioctl->size)) {
+				&cmd, sizeof(cmd))) {
 				rc = -EFAULT;
 				break;
 			}
@@ -404,12 +438,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_MAP_BUF: {
 		struct cam_mem_mgr_map_cmd cmd;
 
-		if (k_ioctl->size != sizeof(cmd))
+		if (k_ioctl->size < sizeof(cmd))
 			return -EINVAL;
 
 		if (copy_from_user(&cmd,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(cmd))) {
 			rc = -EFAULT;
 			break;
 		}
@@ -418,7 +452,7 @@ static long cam_private_ioctl(struct file *file, void *fh,
 		if (!rc)
 			if (copy_to_user(
 				u64_to_user_ptr(k_ioctl->handle),
-				&cmd, k_ioctl->size)) {
+				&cmd, sizeof(cmd))) {
 				rc = -EFAULT;
 				break;
 			}
@@ -427,12 +461,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_RELEASE_BUF: {
 		struct cam_mem_mgr_release_cmd cmd;
 
-		if (k_ioctl->size != sizeof(cmd))
+		if (k_ioctl->size < sizeof(cmd))
 			return -EINVAL;
 
 		if (copy_from_user(&cmd,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(cmd))) {
 			rc = -EFAULT;
 			break;
 		}
@@ -443,12 +477,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_CACHE_OPS: {
 		struct cam_mem_cache_ops_cmd cmd;
 
-		if (k_ioctl->size != sizeof(cmd))
+		if (k_ioctl->size < sizeof(cmd))
 			return -EINVAL;
 
 		if (copy_from_user(&cmd,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(cmd))) {
 			rc = -EFAULT;
 			break;
 		}
@@ -461,12 +495,12 @@ static long cam_private_ioctl(struct file *file, void *fh,
 	case CAM_REQ_MGR_LINK_CONTROL: {
 		struct cam_req_mgr_link_control cmd;
 
-		if (k_ioctl->size != sizeof(cmd))
+		if (k_ioctl->size < sizeof(cmd))
 			return -EINVAL;
 
 		if (copy_from_user(&cmd,
 			u64_to_user_ptr(k_ioctl->handle),
-			k_ioctl->size)) {
+			sizeof(cmd))) {
 			rc = -EFAULT;
 			break;
 		}
@@ -477,6 +511,8 @@ static long cam_private_ioctl(struct file *file, void *fh,
 		}
 		break;
 	default:
+		CAM_ERR(CAM_CRM, "unknown ioctl op=0x%x size=%d",
+			k_ioctl->op_code, k_ioctl->size);
 		return -ENOIOCTLCMD;
 	}
 
