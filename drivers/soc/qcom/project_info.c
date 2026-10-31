@@ -896,6 +896,11 @@ static int __init init_project(void)
 
     init_project_info();
 
+    if (!project_info_desc_v1 && !project_info_desc_v2) {
+        pr_err("%s: project info unavailable, skip\n", __func__);
+        return 0;
+    }
+
     if( GET_PROJECT_INFO(hw_version) > 32 ){
         ret = platform_driver_register(&aboard_driver);
         if (ret)

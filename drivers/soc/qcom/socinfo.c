@@ -34,6 +34,7 @@
 #include <soc/qcom/socinfo.h>
 #include <soc/qcom/smem.h>
 #include <soc/qcom/boot_stats.h>
+#include <linux/pucci_milestone.h>
 
 #define BUILD_ID_LENGTH 32
 #define CHIP_ID_LENGTH 32
@@ -1803,6 +1804,7 @@ static int __init socinfo_init_sysfs(void)
 	struct soc_device *soc_dev;
 	struct soc_device_attribute *soc_dev_attr;
 
+	pucci_submark(0, 0xFFFF0000);
 	if (!socinfo) {
 		pr_err("No socinfo found!\n");
 		return -ENODEV;
@@ -1815,7 +1817,9 @@ static int __init socinfo_init_sysfs(void)
 	}
 
 	soc_info_populate(soc_dev_attr);
+	pucci_submark(1, 0xFFFF8000);
 	soc_dev = soc_device_register(soc_dev_attr);
+	pucci_submark(2, 0xFF80FF00);
 	if (IS_ERR_OR_NULL(soc_dev)) {
 		kfree(soc_dev_attr);
 		 pr_err("Soc device register failed\n");
@@ -1824,6 +1828,7 @@ static int __init socinfo_init_sysfs(void)
 
 	msm_soc_device = soc_device_to_device(soc_dev);
 	populate_soc_sysfs_files(msm_soc_device);
+	pucci_submark(3, 0xFF00FF00);
 	return 0;
 }
 

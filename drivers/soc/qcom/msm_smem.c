@@ -586,12 +586,14 @@ void *smem_find(unsigned int id, unsigned int size_in, unsigned int to_proc,
 	 * this code path, so we must be intellegent to know that the spinlock
 	 * item is a special case.
 	 */
-	if (!is_probe_done() && id != SMEM_SPINLOCK_ARRAY)
+	if (!is_probe_done() && id != SMEM_SPINLOCK_ARRAY) {
 		return ERR_PTR(-EPROBE_DEFER);
+	}
 
 	ptr = smem_get_entry(id, &size, to_proc, flags);
-	if (!ptr)
+	if (!ptr) {
 		return 0;
+	}
 
 	size_in = ALIGN(size_in, 8);
 	if (size_in != size) {
@@ -1428,6 +1430,7 @@ static int msm_smem_probe(struct platform_device *pdev)
 	int smem_idx = 0;
 	bool security_enabled;
 
+
 	r = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 						"smem_targ_info_imem");
 	if (r) {
@@ -1480,8 +1483,9 @@ smem_targ_info_done:
 		return -ENODEV;
 	}
 
-	if (!smem_initialized_check())
+	if (!smem_initialized_check()) {
 		return -ENODEV;
+	}
 
 	/*
 	 * The software implementation requires smem_find(), which needs

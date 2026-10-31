@@ -773,10 +773,11 @@ static int shrlog_set_apps_info(shrlog_fixed_apps_info *apps_info)
 	apps_info->adr.st.runqueues_addr =
 		(shrlog_kernel_t)(&single_task_running);
 #endif /* CONFIG_SCHED_QHMP */
-	apps_info->rq_curr_offset = offsetof(struct rq, curr);
-	apps_info->rq_idle_offset = offsetof(struct rq, idle);
-	apps_info->rq_stop_offset = offsetof(struct rq, stop);
-	apps_info->rq_nr_running_offset = offsetof(struct rq, nr_running);
+	WRITE_ONCE(apps_info->rq_curr_offset, offsetof(struct rq, curr));
+	WRITE_ONCE(apps_info->rq_idle_offset, offsetof(struct rq, idle));
+	WRITE_ONCE(apps_info->rq_stop_offset, offsetof(struct rq, stop));
+	WRITE_ONCE(apps_info->rq_nr_running_offset,
+		   offsetof(struct rq, nr_running));
 #endif /* CONFIG_SHARP_SHLOG_LATESTSTACK */
 
 /*
@@ -837,6 +838,7 @@ static int shrlog_probe(struct platform_device *pdev)
 #if defined(CONFIG_SHARP_HANDLE_PANIC) && defined(CONFIG_SHARP_HANDLE_DLOAD)
 	int s_enabled = 0;
 #endif /* CONFIG_SHARP_HANDLE_PANIC && CONFIG_SHARP_HANDLE_DLOAD */
+
 
 
 	if (!pdev->dev.of_node) {
