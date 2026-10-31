@@ -350,7 +350,7 @@ int adreno_ringbuffer_probe(struct adreno_device *adreno_dev, bool nopreempt)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int i;
-	unsigned int priv = KGSL_MEMDESC_RANDOM | KGSL_MEMDESC_PRIVILEGED;
+	unsigned int priv = KGSL_MEMDESC_RANDOM;
 	int status = -ENOMEM;
 
 	if (!adreno_is_a3xx(adreno_dev)) {

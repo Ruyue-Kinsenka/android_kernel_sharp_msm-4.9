@@ -18,6 +18,7 @@
 #include <linux/genalloc.h>
 #include <linux/slab.h>
 #include <linux/iommu.h>
+#include <linux/moduleparam.h>
 #include <linux/msm_kgsl.h>
 #include <linux/ratelimit.h>
 #include <linux/of_platform.h>
@@ -35,6 +36,9 @@
 #include "adreno.h"
 #include "kgsl_trace.h"
 #include "kgsl_pwrctrl.h"
+
+static bool kgsl_iommu_nopriv;
+module_param_named(nopriv, kgsl_iommu_nopriv, bool, 0644);
 
 #define CP_APERTURE_REG	0
 #define CP_SMMU_APERTURE_ID 0x1B
@@ -1825,8 +1829,12 @@ static unsigned int _get_protection_flags(struct kgsl_memdesc *memdesc)
 	if (memdesc->flags & KGSL_MEMFLAGS_GPUREADONLY)
 		flags &= ~IOMMU_WRITE;
 
-	if (memdesc->priv & KGSL_MEMDESC_PRIVILEGED)
-		flags |= IOMMU_PRIV;
+	if (memdesc->priv & KGSL_MEMDESC_PRIVILEGED) {
+		if (!kgsl_iommu_nopriv)
+			flags |= IOMMU_PRIV;
+		pr_info("kgsl_iommu: priv memdesc gpuaddr=0x%llx size=0x%zx flags=0x%x\n",
+			(unsigned long long)memdesc->gpuaddr, memdesc->size, flags);
+	}
 
 	if (memdesc->flags & KGSL_MEMFLAGS_IOCOHERENT)
 		flags |= IOMMU_CACHE;
