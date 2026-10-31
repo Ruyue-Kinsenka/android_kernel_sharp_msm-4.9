@@ -1088,6 +1088,7 @@ int cam_ois_driver_cmd(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 		return -EINVAL;
 	}
 
+	cam_compat_fix_opcode(&cmd->op_code);
 	if (cmd->handle_type != CAM_HANDLE_USER_POINTER) {
 		CAM_ERR(CAM_OIS, "Invalid handle type: %d",
 			cmd->handle_type);

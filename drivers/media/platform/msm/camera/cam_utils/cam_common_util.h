@@ -15,6 +15,7 @@
 
 #include <linux/types.h>
 #include <linux/kernel.h>
+#include <media/cam_defs.h>
 
 #define CAM_BITS_MASK_SHIFT(x, mask, shift) (((x) & (mask)) >> shift)
 
@@ -51,5 +52,17 @@ int cam_common_util_get_string_index(const char **strings,
  */
 uint32_t cam_common_util_remove_duplicate_arr(int32_t *array,
 	uint32_t num);
+
+/*
+ * Legacy userspace camera blobs (pre-GET_FUSE_ID uapi headers) use
+ * CAM_COMMON_OPCODE_MAX = 0x109, shifting every device opcode down
+ * by one vs this kernel's numbering. Translate their opcodes.
+ */
+static inline void cam_compat_fix_opcode(uint32_t *op_code)
+{
+	if (*op_code >= CAM_COMMON_OPCODE_MAX &&
+		*op_code < CAM_COMMON_OPCODE_BASE_v2)
+		*op_code += 1;
+}
 
 #endif /* _CAM_COMMON_UTIL_H_ */

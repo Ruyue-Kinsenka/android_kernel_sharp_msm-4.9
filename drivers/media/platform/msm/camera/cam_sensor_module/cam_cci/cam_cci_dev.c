@@ -417,8 +417,13 @@ static int cam_cci_assign_fops(void)
 	return 0;
 }
 
+int cam_dev_mgr_create_subdev_nodes(void);
+
 static int __init cam_cci_late_init(void)
 {
+	/* subdev nodes may not exist yet if CRM ran late; ensure they're
+	 * created before wiring fops (idempotent, -EEXIST if done) */
+	cam_dev_mgr_create_subdev_nodes();
 	return cam_cci_assign_fops();
 }
 
@@ -433,7 +438,7 @@ static void __exit cam_cci_exit_module(void)
 }
 
 module_init(cam_cci_init_module);
-late_initcall(cam_cci_late_init);
+late_initcall_sync(cam_cci_late_init);
 module_exit(cam_cci_exit_module);
 MODULE_DESCRIPTION("MSM CCI driver");
 MODULE_LICENSE("GPL v2");

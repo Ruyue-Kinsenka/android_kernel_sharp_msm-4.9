@@ -15,6 +15,7 @@
 #include "cam_ir_led_dev.h"
 #include "cam_ir_led_soc.h"
 #include "cam_ir_led_core.h"
+#include "cam_common_util.h"
 
 static int32_t cam_ir_led_driver_cmd(struct cam_ir_led_ctrl *ictrl,
 		void *arg, struct cam_ir_led_private_soc *soc_private)
@@ -28,6 +29,7 @@ static int32_t cam_ir_led_driver_cmd(struct cam_ir_led_ctrl *ictrl,
 		return -EINVAL;
 	}
 
+	cam_compat_fix_opcode(&cmd->op_code);
 	if (cmd->handle_type != CAM_HANDLE_USER_POINTER) {
 		CAM_ERR(CAM_IR_LED, "Invalid handle type: %d",
 			cmd->handle_type);

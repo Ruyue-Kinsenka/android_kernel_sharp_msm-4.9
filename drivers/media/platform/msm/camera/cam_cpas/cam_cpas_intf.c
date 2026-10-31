@@ -22,6 +22,7 @@
 
 #include "cam_subdev.h"
 #include "cam_cpas_hw_intf.h"
+#include "cam_common_util.h"
 
 #define CAM_CPAS_DEV_NAME    "cam-cpas"
 #define CAM_CPAS_INTF_INITIALIZED() (g_cpas_intf && g_cpas_intf->probe_done)
@@ -363,6 +364,7 @@ int cam_cpas_subdev_cmd(struct cam_cpas_intf *cpas_intf,
 		return -EINVAL;
 	}
 
+	cam_compat_fix_opcode(&cmd->op_code);
 	switch (cmd->op_code) {
 	case CAM_QUERY_CAP: {
 		struct cam_cpas_query_cap query;

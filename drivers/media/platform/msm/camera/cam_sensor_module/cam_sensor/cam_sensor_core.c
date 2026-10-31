@@ -633,6 +633,11 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		return -EINVAL;
 	}
 
+	cam_compat_fix_opcode(&cmd->op_code);
+	CAM_INFO(CAM_SENSOR, "idx:%d cmd op:0x%x htype:%d size:%d",
+		s_ctrl->soc_info.index, cmd->op_code, cmd->handle_type,
+		cmd->size);
+
 	if (cmd->op_code != CAM_SENSOR_PROBE_CMD) {
 		if (cmd->handle_type != CAM_HANDLE_USER_POINTER) {
 			CAM_ERR(CAM_SENSOR, "Invalid handle type: %d",
@@ -837,6 +842,12 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		struct  cam_sensor_query_cap sensor_cap;
 
 		cam_sensor_query_cap(s_ctrl, &sensor_cap);
+		CAM_INFO(CAM_SENSOR,
+			"cap slot:%d act:%d eep:%d ois:%d flash:%d csi:%d ir:%d",
+			sensor_cap.slot_info, sensor_cap.actuator_slot_id,
+			sensor_cap.eeprom_slot_id, sensor_cap.ois_slot_id,
+			sensor_cap.flash_slot_id, sensor_cap.csiphy_slot_id,
+			sensor_cap.ir_led_slot_id);
 		if (copy_to_user(u64_to_user_ptr(cmd->handle),
 			&sensor_cap, sizeof(struct  cam_sensor_query_cap))) {
 			CAM_ERR(CAM_SENSOR, "Failed Copy to User");

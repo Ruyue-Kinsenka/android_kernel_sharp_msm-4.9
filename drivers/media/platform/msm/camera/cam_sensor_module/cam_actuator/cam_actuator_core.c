@@ -849,6 +849,8 @@ int32_t cam_actuator_driver_cmd(struct cam_actuator_ctrl_t *a_ctrl,
 		return -EINVAL;
 	}
 
+	cam_compat_fix_opcode(&cmd->op_code);
+
 	soc_private =
 		(struct cam_actuator_soc_private *)a_ctrl->soc_info.soc_private;
 

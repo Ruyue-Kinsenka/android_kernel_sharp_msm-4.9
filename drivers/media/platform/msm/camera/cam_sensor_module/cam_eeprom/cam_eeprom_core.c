@@ -1276,6 +1276,7 @@ int32_t cam_eeprom_driver_cmd(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 		return -EINVAL;
 	}
 
+	cam_compat_fix_opcode(&cmd->op_code);
 	if (cmd->handle_type != CAM_HANDLE_USER_POINTER) {
 		CAM_ERR(CAM_EEPROM, "Invalid handle type: %d",
 			cmd->handle_type);
