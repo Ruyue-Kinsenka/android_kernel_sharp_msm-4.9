@@ -98,6 +98,11 @@ enum cam_isp_hw_cmd_type {
 	CAM_ISP_HW_CMD_SOF_IRQ_DEBUG,
 	CAM_ISP_HW_CMD_SET_CAMIF_DEBUG,
 	CAM_ISP_HW_CMD_GET_IRQ_REGISTER_DUMP,
+	CAM_ISP_HW_CMD_UBWC_UPDATE,
+	CAM_ISP_HW_CMD_CSID_CLOCK_UPDATE,
+	CAM_ISP_HW_CMD_FE_UPDATE_IN_RD,
+	CAM_ISP_HW_CMD_FE_UPDATE_BUS_RD,
+	CAM_ISP_HW_CMD_FPS_CONFIG,
 	CAM_ISP_HW_CMD_MAX,
 };
 
@@ -204,6 +209,8 @@ struct cam_isp_hw_get_cmd_update {
 		struct cam_isp_port_hfr_config       *hfr_update;
 		struct cam_isp_clock_config          *clock_update;
 		struct cam_isp_bw_config             *bw_update;
+		struct cam_ubwc_plane_cfg_v1         *ubwc_update;
+		struct cam_fe_config                 *fe_update;
 	};
 };
 

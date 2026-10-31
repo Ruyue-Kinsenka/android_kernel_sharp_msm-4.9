@@ -2711,6 +2711,23 @@ static int cam_ife_csid_sof_irq_debug(
 	return 0;
 }
 
+static int cam_ife_csid_set_csid_clock(
+	struct cam_ife_csid_hw *csid_hw, void *cmd_args)
+{
+	struct cam_ife_csid_clock_update_args *clk_update = NULL;
+
+	if (!csid_hw)
+		return -EINVAL;
+
+	clk_update =
+		(struct cam_ife_csid_clock_update_args *)cmd_args;
+
+	csid_hw->clk_rate = clk_update->clk_rate;
+	CAM_DBG(CAM_ISP, "CSID clock rate %llu", csid_hw->clk_rate);
+
+	return 0;
+}
+
 static int cam_ife_csid_process_cmd(void *hw_priv,
 	uint32_t cmd_type, void *cmd_args, uint32_t arg_size)
 {
@@ -2741,6 +2758,9 @@ static int cam_ife_csid_process_cmd(void *hw_priv,
 		break;
 	case CAM_IFE_CSID_SOF_IRQ_DEBUG:
 		rc = cam_ife_csid_sof_irq_debug(csid_hw, cmd_args);
+		break;
+	case CAM_ISP_HW_CMD_CSID_CLOCK_UPDATE:
+		rc = cam_ife_csid_set_csid_clock(csid_hw, cmd_args);
 		break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",

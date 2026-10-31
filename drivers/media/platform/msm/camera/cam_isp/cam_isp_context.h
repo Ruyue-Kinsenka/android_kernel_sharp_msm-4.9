@@ -194,6 +194,8 @@ struct cam_isp_context {
 		CAM_ISP_CTX_STATE_MONITOR_MAX_ENTRIES];
 	bool                             rdi_only_context;
 	atomic_t                         bubble_sof_count;
+	bool                             split_acquire;
+	bool                             hw_acquired;
 };
 
 /**

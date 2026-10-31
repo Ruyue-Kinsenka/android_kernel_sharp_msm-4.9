@@ -104,20 +104,43 @@ struct cam_isp_bw_config_internal {
 };
 
 /**
+ * struct cam_isp_bw_config_internal_ab - Internal AB Bandwidth configuration
+ *
+ * @usage_type:                 Usage type (Single/Dual)
+ * @num_rdi:                    Number of RDI votes
+ * @left_pix_vote_ab:           Left ISP AB bandwidth vote
+ * @right_pix_vote_ab:          Right ISP AB bandwidth vote
+ * @rdi_vote_ab:                RDI AB bandwidth requirements
+ */
+
+struct cam_isp_bw_config_internal_ab {
+	uint32_t                  usage_type;
+	uint32_t                  num_rdi;
+	uint64_t                  left_pix_vote_ab;
+	uint64_t                  right_pix_vote_ab;
+	uint64_t                  rdi_vote_ab[CAM_IFE_RDI_NUM_MAX];
+};
+
+/**
  * struct cam_isp_prepare_hw_update_data - hw prepare data
  *
  * @packet_opcode_type:     Packet header opcode in the packet header
  *                          this opcode defines, packet is init packet or
  *                          update packet
  * @bw_config:              BW config information
+ * @bw_config_ab:           AB BW config information
  * @bw_config_valid:        Flag indicating whether the bw_config at the index
  *                          is valid or not
+ * @fps:                    fps value which has been updated in hw
  *
  */
 struct cam_isp_prepare_hw_update_data {
 	uint32_t                          packet_opcode_type;
 	struct cam_isp_bw_config_internal bw_config[CAM_IFE_HW_NUM_MAX];
+	struct cam_isp_bw_config_internal_ab
+		bw_config_ab[CAM_IFE_HW_NUM_MAX];
 	bool                              bw_config_valid[CAM_IFE_HW_NUM_MAX];
+	uint32_t                          fps;
 };
 
 
