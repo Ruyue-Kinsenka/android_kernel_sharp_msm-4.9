@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, 2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -59,8 +59,6 @@ struct adm_copp {
 	atomic_t id[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
 	atomic_t cnt[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
 	atomic_t topology[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
-	// MM.Audio, 2019/07/13, add for screen record headset mic path
-	atomic_t session_type[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
 	atomic_t mode[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
 	atomic_t stat[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
 	atomic_t rate[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
@@ -129,35 +127,6 @@ static struct adm_multi_ch_map multi_ch_maps[2] = {
 static int adm_get_parameters[MAX_COPPS_PER_PORT * ADM_GET_PARAMETER_LENGTH];
 static int adm_module_topo_list[
 	MAX_COPPS_PER_PORT * ADM_GET_TOPO_MODULE_LIST_LENGTH];
-// MM.Audio, 2019/07/13, add for screen record headset mic path
-static int adm_session[AFE_MAX_PORTS];
-
-// MM.Audio, 2019/07/13, add for screen record headset mic path
-void adm_reset_session_type(void)
-{
-	int i;
-	for (i = 0; i < AFE_MAX_PORTS; i++)
-		adm_session[i] = 0;
-}
-
-/**
- * adm_set_session_type -
- *        validate given port id
- *
- * @port_id: Port ID number
- * @session_type: The direction of stream
- *
- */
-void adm_set_session_type(int port_id, int session_type)
-{
-	adm_session[port_id] = session_type;
-}
-EXPORT_SYMBOL(adm_set_session_type);
-
-int adm_get_session_type(int port_id)
-{
-	return adm_session[port_id];
-}
 
 int adm_validate_and_get_port_index(int port_id)
 {
@@ -273,8 +242,6 @@ static int adm_get_idx_if_copp_exists(int port_idx, int topology, int mode,
 		    (rate == atomic_read(&this_adm.copp.rate[port_idx][idx])) &&
 		    (bit_width ==
 			atomic_read(&this_adm.copp.bit_width[port_idx][idx])) &&
-		    (adm_get_session_type(port_idx) ==
-			atomic_read(&this_adm.copp.session_type[port_idx][idx])) &&
 		    (app_type ==
 			atomic_read(&this_adm.copp.app_type[port_idx][idx])))
 			return idx;
@@ -1378,9 +1345,6 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 					    &this_adm.copp.app_type[i][j], 0);
 					atomic_set(
 					   &this_adm.copp.acdb_id[i][j], 0);
-					// MM.Audio, 2019/07/13, add for screen record headset mic path
-					atomic_set(
-					    &this_adm.copp.session_type[i][j], 0);
 					this_adm.copp.adm_status[i][j] =
 						ADM_STATUS_CALIBRATION_REQUIRED;
 				}
@@ -2074,8 +2038,7 @@ static struct cal_block_data *adm_find_cal_by_path(int cal_index, int path)
 			continue;
 
 		if (cal_index == ADM_AUDPROC_CAL ||
-                       cal_index == ADM_LSM_AUDPROC_CAL ||
-                       cal_index == ADM_LSM_AUDPROC_PERSISTENT_CAL) {
+			cal_index == ADM_LSM_AUDPROC_CAL) {
 			audproc_cal_info = cal_block->cal_info;
 			if ((audproc_cal_info->path == path) &&
 			    (cal_block->cal_data.size > 0))
@@ -2112,8 +2075,7 @@ static struct cal_block_data *adm_find_cal_by_app_type(int cal_index, int path,
 			continue;
 
 		if (cal_index == ADM_AUDPROC_CAL ||
-                       cal_index == ADM_LSM_AUDPROC_CAL ||
-                       cal_index == ADM_LSM_AUDPROC_PERSISTENT_CAL) {
+			cal_index == ADM_LSM_AUDPROC_CAL) {
 			audproc_cal_info = cal_block->cal_info;
 			if ((audproc_cal_info->path == path) &&
 			    (audproc_cal_info->app_type == app_type) &&
@@ -2153,8 +2115,7 @@ static struct cal_block_data *adm_find_cal(int cal_index, int path,
 			continue;
 
 		if (cal_index == ADM_AUDPROC_CAL ||
-                       cal_index == ADM_LSM_AUDPROC_CAL ||
-                       cal_index == ADM_LSM_AUDPROC_PERSISTENT_CAL) {
+		    cal_index == ADM_LSM_AUDPROC_CAL) {
 			audproc_cal_info = cal_block->cal_info;
 			if ((audproc_cal_info->path == path) &&
 			    (audproc_cal_info->app_type == app_type) &&
@@ -2243,18 +2204,12 @@ static void send_adm_cal(int port_id, int copp_idx, int path, int perf_mode,
 {
 	pr_debug("%s: port id 0x%x copp_idx %d\n", __func__, port_id, copp_idx);
 
-	if (passthr_mode != LISTEN) {
+	if (passthr_mode != LISTEN)
 		send_adm_cal_type(ADM_AUDPROC_CAL, path, port_id, copp_idx,
 				perf_mode, app_type, acdb_id, sample_rate);
-	} else {
+	else
 		send_adm_cal_type(ADM_LSM_AUDPROC_CAL, path, port_id, copp_idx,
 				  perf_mode, app_type, acdb_id, sample_rate);
-
-		send_adm_cal_type(ADM_LSM_AUDPROC_PERSISTENT_CAL, path,
-				  port_id, copp_idx, perf_mode, app_type,
-				  acdb_id, sample_rate);
-	}
-
 	send_adm_cal_type(ADM_AUDVOL_CAL, path, port_id, copp_idx, perf_mode,
 			  app_type, acdb_id, sample_rate);
 }
@@ -2565,9 +2520,6 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 			   app_type);
 		atomic_set(&this_adm.copp.acdb_id[port_idx][copp_idx],
 			   acdb_id);
-		// MM.Audio, 2019/07/13, add for screen record headset mic path
-		atomic_set(&this_adm.copp.session_type[port_idx][copp_idx],
-			   adm_get_session_type(port_idx));
 		set_bit(ADM_STATUS_CALIBRATION_REQUIRED,
 		(void *)&this_adm.copp.adm_status[port_idx][copp_idx]);
 		if ((path != ADM_PATH_COMPRESSED_RX) &&
@@ -2618,9 +2570,7 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		open.endpoint_id_1 = tmp_port;
 		open.endpoint_id_2 = 0xFFFF;
 
-		// MM.Audio, 2019/07/13, modify for screen record headset mic path
-		if (this_adm.ec_ref_rx && (path != 1) &&
-		    (afe_get_port_type(tmp_port) == MSM_AFE_PORT_TYPE_TX)) {
+		if (this_adm.ec_ref_rx && (path != 1)) {
 			open.endpoint_id_2 = this_adm.ec_ref_rx;
 			this_adm.ec_ref_rx = -1;
 		}
@@ -3112,9 +3062,6 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 		atomic_set(&this_adm.copp.channels[port_idx][copp_idx], 0);
 		atomic_set(&this_adm.copp.bit_width[port_idx][copp_idx], 0);
 		atomic_set(&this_adm.copp.app_type[port_idx][copp_idx], 0);
-		// MM.Audio, 2019/07/13, add for screen record headset mic path
-		atomic_set(&this_adm.copp.session_type[port_idx][copp_idx], 0);
-		adm_session[port_idx] = 0;
 
 		clear_bit(ADM_STATUS_CALIBRATION_REQUIRED,
 			(void *)&this_adm.copp.adm_status[port_idx][copp_idx]);
@@ -3342,9 +3289,6 @@ static int get_cal_type_index(int32_t cal_type)
 	case ADM_RTAC_AUDVOL_CAL_TYPE:
 		ret = ADM_RTAC_AUDVOL_CAL;
 		break;
-	case ADM_LSM_AUDPROC_PERSISTENT_CAL_TYPE:
-		ret = ADM_LSM_AUDPROC_PERSISTENT_CAL;
-		break;
 	default:
 		pr_err("%s: invalid cal type %d!\n", __func__, cal_type);
 	}
@@ -3566,12 +3510,6 @@ static int adm_init_cal_data(void)
 		adm_set_cal, NULL, NULL} },
 		{adm_map_cal_data, adm_unmap_cal_data,
 		cal_utils_match_buf_num} },
-
-		{{ADM_LSM_AUDPROC_PERSISTENT_CAL_TYPE,
-		 {adm_alloc_cal, adm_dealloc_cal, NULL,
-		  adm_set_cal, NULL, NULL} },
-		 {adm_map_cal_data, adm_unmap_cal_data,
-		  cal_utils_match_buf_num} },
 	};
 	pr_debug("%s:\n", __func__);
 
@@ -4251,13 +4189,6 @@ int adm_store_cal_data(int port_id, int copp_idx, int path, int perf_mode,
 	if (cal_index == ADM_AUDPROC_CAL || cal_index == ADM_LSM_AUDPROC_CAL) {
 		if (cal_block->cal_data.size > AUD_PROC_BLOCK_SIZE) {
 			pr_err("%s:audproc:invalid size exp/actual[%zd, %d]\n",
-				__func__, cal_block->cal_data.size, *size);
-			rc = -ENOMEM;
-			goto unlock;
-		}
-	} else if (cal_index == ADM_LSM_AUDPROC_PERSISTENT_CAL) {
-		if (cal_block->cal_data.size > AUD_PROC_PERSIST_BLOCK_SIZE) {
-			pr_err("%s:persist invalid size exp/actual[%zd, %d]\n",
 				__func__, cal_block->cal_data.size, *size);
 			rc = -ENOMEM;
 			goto unlock;
@@ -4981,8 +4912,6 @@ static int __init adm_init(void)
 	atomic_set(&this_adm.mem_map_handles[ADM_MEM_MAP_INDEX_SOURCE_TRACKING],
 		   0);
 
-	// MM.Audio, 2019/07/13, add for screen record headset mic path
-	adm_reset_session_type();
 	return 0;
 }
 

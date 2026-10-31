@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019, 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -33,12 +33,38 @@
 #include <dsp/audio_notifier.h>
 #include <dsp/q6afe-v2.h>
 #include <dsp/q6core.h>
-#include <linux/of_gpio.h>
 #include "msm-pcm-routing-v2.h"
 #include "codecs/msm-cdc-pinctrl.h"
 #include "codecs/wcd934x/wcd934x.h"
 #include "codecs/wcd934x/wcd934x-mbhc.h"
 #include "codecs/wsa881x.h"
+#ifdef CONFIG_SH_AUDIO_DRIVER /*A-004*/
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+#include "codecs/shaudio_wsa8815.h"
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*A-004*/
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /* For LKM */
+
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+#include <linux/notifier.h>
+#include "sharp/shaudio_sdm845.h"
+#ifdef CONFIG_SND_SOC_NXP_CHIP
+#include "sharp/shaudio_tfa98xx_notifier.h"
+#endif /* CONFIG_SND_SOC_NXP_CHIP */
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* For LKM */
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /*A-004*/
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+static int wsa8815_smartpa_detect_finished = 0;
+static int wsa8815_sdm845_notifier_register_count = 0;
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*A-004*/
 
 #define DRV_NAME "sdm845-asoc-snd"
 
@@ -65,10 +91,8 @@
 #define ADSP_STATE_READY_TIMEOUT_MS 3000
 #define DEV_NAME_STR_LEN            32
 
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X)
 #define WSA8810_NAME_1 "wsa881x.20170211"
 #define WSA8810_NAME_2 "wsa881x.20170212"
-#endif
 
 #define WCN_CDC_SLIM_RX_CH_MAX 2
 #define WCN_CDC_SLIM_TX_CH_MAX 3
@@ -80,6 +104,24 @@
 
 #define TDM_MAX_SLOTS		8
 #define TDM_SLOT_WIDTH_BITS	32
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /*B-019*/
+#ifdef CONFIG_ARCH_PUCCI
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+static BLOCKING_NOTIFIER_HEAD(speaker_shub_api_notifier_list);
+int register_tfa98xx_shub_api_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&speaker_shub_api_notifier_list, nb);
+}
+EXPORT_SYMBOL(register_tfa98xx_shub_api_notifier);
+int unregister_tfa98xx_shub_api_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&speaker_shub_api_notifier_list, nb);
+}
+EXPORT_SYMBOL(unregister_tfa98xx_shub_api_notifier);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_PUCCI */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*B-019*/
 
 enum {
 	SLIM_RX_0 = 0,
@@ -150,18 +192,10 @@ enum {
 	EXT_DISP_RX_IDX_MAX,
 };
 
-// MM.Audio, 2019/07/13, add for screen record headset mic path
-enum {
-	AFE_LOOPBACK_TX_IDX = 0,
-	AFE_LOOPBACK_TX_IDX_MAX,
-};
-
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X)
 struct msm_wsa881x_dev_info {
 	struct device_node *of_node;
 	u32 index;
 };
-#endif
 
 enum pinctrl_pin_state {
 	STATE_DISABLE = 0, /* All pins are in sleep state */
@@ -184,13 +218,18 @@ struct msm_asoc_mach_data {
 	u32 mclk_freq;
 	int us_euro_gpio; /* used by gpio driver API */
 	int usbc_en2_gpio; /* used by gpio driver API */
-	int us_euro_gpio_value;
 	struct device_node *us_euro_gpio_p; /* used by pinctrl API */
 	struct pinctrl *usbc_en2_gpio_p; /* used by pinctrl API */
 	struct device_node *hph_en1_gpio_p; /* used by pinctrl API */
 	struct device_node *hph_en0_gpio_p; /* used by pinctrl API */
 	struct snd_info_entry *codec_root;
 	struct msm_pinctrl_info pinctrl_info;
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_ARCH_PUCCI
+	int lineout_amp_gpio;
+	struct pinctrl *lineout_amp_gpio_p; /* used by pinctrl API */
+#endif
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-004 */
 };
 
 struct msm_asoc_wcd93xx_codec {
@@ -423,10 +462,6 @@ static struct dev_config slim_tx_cfg[] = {
 	[SLIM_TX_8] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
 };
 
-// MM.Audio, 2019/07/13, add for screen record headset mic path
-static struct dev_config afe_loopback_tx_cfg[] = {
-	[AFE_LOOPBACK_TX_IDX] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-};
 
 /* Default configuration of external display BE */
 static struct dev_config ext_disp_rx_cfg[] = {
@@ -463,7 +498,7 @@ static struct dev_config mi2s_tx_cfg[] = {
 	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[SEC_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[TERT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
+	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 };
 
 static struct dev_config aux_pcm_rx_cfg[] = {
@@ -481,7 +516,6 @@ static struct dev_config aux_pcm_tx_cfg[] = {
 };
 
 static int msm_vi_feed_tx_ch = 2;
-static const char *const afe_loopback_tx_ch_text[] = {"One", "Two"};
 static const char *const slim_rx_ch_text[] = {"One", "Two"};
 static const char *const slim_tx_ch_text[] = {"One", "Two", "Three", "Four",
 						"Five", "Six", "Seven",
@@ -532,9 +566,6 @@ static const char *const mi2s_ch_text[] = {"One", "Two", "Three", "Four",
 					   "Eight"};
 static const char *const hifi_text[] = {"Off", "On"};
 static const char *const qos_text[] = {"Disable", "Enable"};
-
-// MM.Audio, 2019/07/13, add for screen record headset mic path
-static SOC_ENUM_SINGLE_EXT_DECL(afe_loopback_tx_chs, afe_loopback_tx_ch_text);
 
 static SOC_ENUM_SINGLE_EXT_DECL(slim_0_rx_chs, slim_rx_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(slim_2_rx_chs, slim_rx_ch_text);
@@ -609,28 +640,61 @@ static int qos_vote_status;
 
 static bool is_initial_boot;
 static bool codec_reg_done;
-
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X)
 static struct snd_soc_aux_dev *msm_aux_dev;
 static struct snd_soc_codec_conf *msm_codec_conf;
-#endif
-
 static struct msm_asoc_wcd93xx_codec msm_codec_fn;
 
-int usb_sw_gpio = -1;
-int hp_sw_gpio = -1;
-int mbhc_sw_gpio = -1;
-int ldo_sw_gpio = -1;
-extern int smartpa_present;
-extern bool fsa4480_enable;
-extern bool audio_adapter_flag;
 static void *def_tavil_mbhc_cal(void);
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec,
 					int enable, bool dapm);
-
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X)
 static int msm_wsa881x_init(struct snd_soc_component *component);
-#endif
+
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_SND_SOC_NXP_CHIP
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+static BLOCKING_NOTIFIER_HEAD(tfa98xx_sdm845_notifier_list);
+
+int register_tfa98xx_sdm845_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&tfa98xx_sdm845_notifier_list, nb);
+}
+EXPORT_SYMBOL(register_tfa98xx_sdm845_notifier);
+
+int unregister_tfa98xx_sdm845_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&tfa98xx_sdm845_notifier_list, nb);
+}
+EXPORT_SYMBOL(unregister_tfa98xx_sdm845_notifier);
+
+static void msm_tfa98xx_later_probe(struct platform_device *pdev)
+{
+	dev_err(&pdev->dev, "%s()\n", __func__);
+	if (blocking_notifier_call_chain(&tfa98xx_sdm845_notifier_list, TFA98XX_NOTIFIER_DETECTED, NULL)) {
+		blocking_notifier_call_chain(&tfa98xx_sdm845_notifier_list, TFA98XX_NOTIFIER_LATER_PROBE, NULL);
+	} else {
+		dev_err(&pdev->dev, "%s(): tfa98xx unavailable\n", __func__);
+	}
+	return;
+}
+#else
+extern int tfa98xx_later_probe(void);
+extern bool tfa98xx_detected(void);
+
+static void msm_tfa98xx_later_probe(struct platform_device *pdev)
+{
+	dev_err(&pdev->dev, "%s()\n", __func__);
+
+	if (tfa98xx_detected()) {
+		tfa98xx_later_probe();
+	} else {
+		dev_err(&pdev->dev, "%s(): tfa98xx unavailable\n", __func__);
+	}
+	return;
+}
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif  /* CONFIG_SND_SOC_NXP_CHIP */
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-004 */
 
 /*
  * Need to report LINEIN
@@ -643,11 +707,10 @@ static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.mono_stero_detection = false,
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = true,
-	/*wangdongdong@AudioDrv,20180113,modify for headset key*/
 	.key_code[0] = KEY_MEDIA,
-	.key_code[1] = KEY_VOLUMEUP,
-	.key_code[2] = KEY_VOLUMEDOWN,
-	.key_code[3] = 0,
+	.key_code[1] = KEY_VOICECOMMAND,
+	.key_code[2] = KEY_VOLUMEUP,
+	.key_code[3] = KEY_VOLUMEDOWN,
 	.key_code[4] = 0,
 	.key_code[5] = 0,
 	.key_code[6] = 0,
@@ -1012,27 +1075,6 @@ static int slim_tx_bit_format_put(struct snd_kcontrol *kcontrol,
 			ucontrol->value.enumerated.item[0]);
 
 	return 0;
-}
-
-// MM.Audio, 2019/07/13, add for screen record headset mic path
-static int afe_loopback_tx_ch_get(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-   pr_debug("%s: msm_slim_[0]_rx_ch	= %d\n", __func__,
-	    afe_loopback_tx_cfg[0].channels);
-   ucontrol->value.enumerated.item[0] = afe_loopback_tx_cfg[0].channels - 1;
-
-   return 0;
-}
-
-static int afe_loopback_tx_ch_put(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-   afe_loopback_tx_cfg[0].channels = ucontrol->value.enumerated.item[0] + 1;
-   pr_debug("%s: msm_slim_[0]_rx_ch	= %d\n", __func__,
-	    afe_loopback_tx_cfg[0].channels);
-
-   return 1;
 }
 
 static int msm_slim_rx_ch_get(struct snd_kcontrol *kcontrol,
@@ -3000,8 +3042,6 @@ static int msm_qos_ctl_put(struct snd_kcontrol *kcontrol,
 }
 
 static const struct snd_kcontrol_new msm_snd_controls[] = {
-	SOC_ENUM_EXT("AFE_LOOPBACK_TX Channels", afe_loopback_tx_chs,
-			afe_loopback_tx_ch_get, afe_loopback_tx_ch_put),
 	SOC_ENUM_EXT("SLIM_0_RX Channels", slim_0_rx_chs,
 			msm_slim_rx_ch_get, msm_slim_rx_ch_put),
 	SOC_ENUM_EXT("SLIM_2_RX Channels", slim_2_rx_chs,
@@ -3313,7 +3353,78 @@ static int msm_mclk_event(struct snd_soc_dapm_widget *w,
 	}
 	return 0;
 }
-
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_ARCH_PUCCI
+static int msm_lineout_amp_event(struct snd_soc_dapm_widget *w,
+			       struct snd_kcontrol *k, int event)
+{
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+	struct snd_soc_card *card = codec->component.card;
+	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+	struct pinctrl_state *amp_pinctrl_active = NULL;
+	struct pinctrl_state *amp_pinctrl_sleep = NULL;
+	int ret;
+	pdata->lineout_amp_gpio_p = devm_pinctrl_get(card->dev);
+	if(pdata->lineout_amp_gpio >= 0){
+		ret = gpio_request(pdata->lineout_amp_gpio, "lineoutamp_enable");
+		if (ret) {
+			dev_err(card->dev,
+				"%s: Failed to request codec lineout amp en gpio %d error %d\n",
+				__func__, pdata->lineout_amp_gpio, ret);
+		}
+	}
+	if(pdata->lineout_amp_gpio_p){
+		amp_pinctrl_active = pinctrl_lookup_state(
+						pdata->lineout_amp_gpio_p, "amp_active");
+		if (IS_ERR_OR_NULL(amp_pinctrl_active)) {
+			dev_err(card->dev,
+				"%s: Cannot get aud_active pinctrl state:%ld\n",
+				__func__, PTR_ERR(amp_pinctrl_active));
+		}
+		amp_pinctrl_sleep = pinctrl_lookup_state(
+						pdata->lineout_amp_gpio_p, "amp_sleep");
+		if (IS_ERR_OR_NULL(amp_pinctrl_sleep)) {
+			dev_err(card->dev,
+				"%s: Cannot get aud_sleep pinctrl state:%ld\n",
+				__func__, PTR_ERR(amp_pinctrl_sleep));
+		}
+	}
+	switch (event) {
+		case SND_SOC_DAPM_POST_PMU:
+#ifdef CONFIG_SH_AUDIO_DRIVER /* B-019 */
+#ifdef CONFIG_ARCH_PUCCI
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+			blocking_notifier_call_chain(&speaker_shub_api_notifier_list, 1, NULL);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_PUCCI */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* B-019 */
+			if(pdata->lineout_amp_gpio_p){
+				pinctrl_select_state(pdata->lineout_amp_gpio_p,amp_pinctrl_active);
+			}else if(pdata->lineout_amp_gpio >= 0){
+				gpio_set_value_cansleep(pdata->lineout_amp_gpio, 1);
+			}else
+				pr_err("%s,cann't enable lineout amp gpio",__func__);
+			break;
+		case SND_SOC_DAPM_PRE_PMD:
+#ifdef CONFIG_SH_AUDIO_DRIVER /* B-019 */
+#ifdef CONFIG_ARCH_PUCCI
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+			blocking_notifier_call_chain(&speaker_shub_api_notifier_list, 0, NULL);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_PUCCI */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* B-019 */
+			if(pdata->lineout_amp_gpio_p){
+				pinctrl_select_state(pdata->lineout_amp_gpio_p,amp_pinctrl_sleep);
+			}else if(pdata->lineout_amp_gpio >= 0){
+				gpio_set_value_cansleep(pdata->lineout_amp_gpio, 0);
+			}else
+				pr_err("%s,cann't disable lineout amp gpio",__func__);
+			break;
+	}
+	return 0;
+}
+#endif
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-004 */
 static int msm_hifi_ctrl_event(struct snd_soc_dapm_widget *w,
 			       struct snd_kcontrol *k, int event)
 {
@@ -3356,11 +3467,19 @@ static const struct snd_soc_dapm_widget msm_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY("MCLK TX",  SND_SOC_NOPM, 0, 0,
 	msm_mclk_tx_event, SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 
-	SND_SOC_DAPM_SPK("Lineout_1 amp", NULL),
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_ARCH_PUCCI
+	SND_SOC_DAPM_SPK("Lineout_1 amp", msm_lineout_amp_event),
+#endif
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-004 */
 	SND_SOC_DAPM_SPK("Lineout_2 amp", NULL),
 	SND_SOC_DAPM_SPK("hifi amp", msm_hifi_ctrl_event),
 	SND_SOC_DAPM_MIC("Handset Mic", NULL),
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-003 */
+	SND_SOC_DAPM_MIC("Primary Mic", NULL),
+	SND_SOC_DAPM_MIC("Secondary Mic", NULL),
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-003*/
 	SND_SOC_DAPM_MIC("ANCRight Headset Mic", NULL),
 	SND_SOC_DAPM_MIC("ANCLeft Headset Mic", NULL),
 	SND_SOC_DAPM_MIC("Analog Mic5", NULL),
@@ -3471,13 +3590,6 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 		  params_rate(params));
 
 	switch (dai_link->id) {
-	case MSM_BACKEND_DAI_AFE_LOOPBACK_TX:
-		// MM.Audio, 2019/07/13, add for screen record headset mic path
-		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-				afe_loopback_tx_cfg[0].bit_format);
-		rate->min = rate->max = afe_loopback_tx_cfg[0].sample_rate;
-		channels->min = channels->max = afe_loopback_tx_cfg[0].channels;
-		break;
 	case MSM_BACKEND_DAI_SLIMBUS_0_RX:
 	case MSM_BACKEND_DAI_SLIMBUS_1_RX:
 	case MSM_BACKEND_DAI_SLIMBUS_2_RX:
@@ -3885,12 +3997,9 @@ err_lookup_state:
 	return ret;
 }
 
-extern void setHpSwGpioPin(int value);
 static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 {
-#if 0
 	int value = 0;
-#endif
 	int ret = 0;
 	struct snd_soc_card *card = codec->component.card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
@@ -3899,7 +4008,6 @@ static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 		return false;
 
 	if (!wcd_mbhc_cfg.enable_usbc_analog) {
-#if 0
 		/* if usbc is not defined, swap using us_euro_gpio_p */
 		if (pdata->us_euro_gpio_p) {
 			value = msm_cdc_pinctrl_get_state(
@@ -3918,16 +4026,6 @@ static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 		}
 		pr_debug("%s: swap select switch %d to %d\n", __func__,
 			 value, !value);
-#else
-		if (pdata->us_euro_gpio_value == 0) {
-			pdata->us_euro_gpio_value = 1;
-		} else {
-			pdata->us_euro_gpio_value = 0;
-		}
-		setHpSwGpioPin(pdata->us_euro_gpio_value);
-		pr_err("%s set us_euro_gpio %d active = %d\n", __func__,
-		pdata->us_euro_gpio_value, active);
-#endif
 		ret = true;
 	} else {
 		/* if usbc is defined, swap using usbc_en2 */
@@ -4176,6 +4274,10 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_ignore_suspend(dapm, "VIINPUT");
 	snd_soc_dapm_ignore_suspend(dapm, "ANC HPHL");
 	snd_soc_dapm_ignore_suspend(dapm, "ANC HPHR");
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-003 */
+	snd_soc_dapm_ignore_suspend(dapm, "Primary Mic");
+	snd_soc_dapm_ignore_suspend(dapm, "Secondary Mic");
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-003*/
 
 	snd_soc_dapm_sync(dapm);
 
@@ -4211,15 +4313,12 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	    !list_empty(&rtd->card->aux_comp_list)) {
 		aux_comp = list_first_entry(&rtd->card->aux_comp_list,
 				struct snd_soc_component, list_aux);
-
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X)
 		if (!strcmp(aux_comp->name, WSA8810_NAME_1) ||
 		    !strcmp(aux_comp->name, WSA8810_NAME_2)) {
 			tavil_set_spkr_mode(rtd->codec, WCD934X_SPKR_MODE_1);
 			tavil_set_spkr_gain_offset(rtd->codec,
 					WCD934X_RX_GAIN_OFFSET_M1P5_DB);
 		}
-#endif
 	}
 	card = rtd->card->snd_card;
 	entry = snd_info_create_subdir(card->module, "codecs",
@@ -4263,12 +4362,7 @@ static void *def_tavil_mbhc_cal(void)
 		return NULL;
 
 #define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(tavil_wcd_cal)->X) = (Y))
-#if 0
-/*wangdongdong@AudioDrv,2018-06-14,avoid JBL lock device not to enter standby*/
 	S(v_hs_max, 1600);
-#else
-	S(v_hs_max, 1700);
-#endif
 #undef S
 #define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(tavil_wcd_cal)->X) = (Y))
 	S(num_btn, WCD_MBHC_DEF_BUTTONS);
@@ -4278,17 +4372,6 @@ static void *def_tavil_mbhc_cal(void)
 	btn_high = ((void *)&btn_cfg->_v_btn_low) +
 		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
 
-#if 1
-/*wangdongdong@AudioDrv,20180113,modify for headset button*/
-	btn_high[0] = 112;
-	btn_high[1] = 220;
-	btn_high[2] = 437;
-	btn_high[3] = 600;
-	btn_high[4] = 600;
-	btn_high[5] = 600;
-	btn_high[6] = 600;
-	btn_high[7] = 600;
-#else
 	btn_high[0] = 75;
 	btn_high[1] = 150;
 	btn_high[2] = 237;
@@ -4297,7 +4380,6 @@ static void *def_tavil_mbhc_cal(void)
 	btn_high[5] = 500;
 	btn_high[6] = 500;
 	btn_high[7] = 500;
-#endif
 
 	return tavil_wcd_cal;
 }
@@ -5668,21 +5750,40 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_SND_SOC_NXP_CHIP
 	{
-		.name = "Quaternary MI2S_TX Hostless",
-		.stream_name = "Quaternary MI2S_TX Hostless",
-		.cpu_dai_name = "QUAT_MI2S_TX_HOSTLESS",
+		.name = "Tertiary MI2S TX_Hostless",
+		.stream_name = "Tertiary MI2S_TX Hostless Capture",
+		.cpu_dai_name = "TERT_MI2S_TX_HOSTLESS",
 		.platform_name = "msm-pcm-hostless",
 		.dynamic = 1,
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			    SND_SOC_DPCM_TRIGGER_POST},
+				SND_SOC_DPCM_TRIGGER_POST},
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+	{
+		.name = "Tertiary MI2S RX_Hostless",
+		.stream_name = "Tertiary MI2S_RX Hostless Playback",
+		.cpu_dai_name = "TERT_MI2S_RX_HOSTLESS",
+		.platform_name = "msm-pcm-hostless",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+				SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+	},
+#endif  /* CONFIG_SND_SOC_NXP_CHIP */
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-004 */
 };
 
 static struct snd_soc_dai_link msm_tavil_fe_dai_links[] = {
@@ -5892,33 +5993,6 @@ static struct snd_soc_dai_link msm_common_be_dai_links[] = {
 		.dpcm_playback = 1,
 		.id = MSM_BACKEND_DAI_VOICE2_PLAYBACK_TX,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ignore_suspend = 1,
-	},
-	/* Proxy Tx BACK END DAI Link */
-	{
-		.name = LPASS_BE_PROXY_TX,
-		.stream_name = "Proxy Capture",
-		.cpu_dai_name = "msm-dai-q6-dev.8195",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_PROXY_TX,
-		.ignore_suspend = 1,
-	},
-	/* Proxy Rx BACK END DAI Link */
-	{
-		.name = LPASS_BE_PROXY_RX,
-		.stream_name = "Proxy Playback",
-		.cpu_dai_name = "msm-dai-q6-dev.8194",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_PROXY_RX,
-		.ignore_pmdown_time = 1,
 		.ignore_suspend = 1,
 	},
 	{
@@ -6263,6 +6337,27 @@ static struct snd_soc_dai_link msm_tavil_be_dai_links[] = {
 		.ignore_pmdown_time = 1,
 	},
 };
+#ifdef CONFIG_SH_AUDIO_DRIVER  /*A-004*/
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+static int shub_audio_wsa8815_handler_func(struct notifier_block *nb,
+                                                 unsigned long on, void *unused)
+{
+	pr_info("%s,wsa register ret is %lu",__func__,on);
+	if(on == 1){
+		++wsa8815_smartpa_detect_finished;
+	}else
+		wsa8815_smartpa_detect_finished = -1;
+	pr_err("wsa8815_smartpa_detect_finished is %d",wsa8815_smartpa_detect_finished);
+	return 0;
+}
+
+static struct notifier_block shub_audio_wsa8815_handler = {
+    .notifier_call = shub_audio_wsa8815_handler_func,
+};
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*A-004*/
 
 static struct snd_soc_dai_link msm_wcn_be_dai_links[] = {
 	{
@@ -6334,8 +6429,6 @@ static struct snd_soc_dai_link ext_disp_be_dai_link[] = {
 	},
 };
 
-#if 1
-// suzhiguang,different projects use different smartpa,2018-04-10
 static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 	{
 		.name = LPASS_BE_PRI_MI2S_RX,
@@ -6454,253 +6547,6 @@ static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 		.ignore_suspend = 1,
 	},
 };
-
-static struct snd_soc_dai_link msm_mi2s_be_dai_links_max[] = {
-	{
-		.name = LPASS_BE_PRI_MI2S_RX,
-		.stream_name = "Primary MI2S Playback",
-		.cpu_dai_name = "msm-dai-q6-mi2s.0",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_PRI_MI2S_RX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-	},
-	{
-		.name = LPASS_BE_PRI_MI2S_TX,
-		.stream_name = "Primary MI2S Capture",
-		.cpu_dai_name = "msm-dai-q6-mi2s.0",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_PRI_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-	{
-		.name = LPASS_BE_SEC_MI2S_RX,
-		.stream_name = "Secondary MI2S Playback",
-		.cpu_dai_name = "msm-dai-q6-mi2s.1",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_SECONDARY_MI2S_RX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-	},
-	{
-		.name = LPASS_BE_SEC_MI2S_TX,
-		.stream_name = "Secondary MI2S Capture",
-		.cpu_dai_name = "msm-dai-q6-mi2s.1",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_SECONDARY_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-	{
-		.name = LPASS_BE_TERT_MI2S_RX,
-		.stream_name = "Tertiary MI2S Playback",
-		.cpu_dai_name = "msm-dai-q6-mi2s.2",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_TERTIARY_MI2S_RX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-	},
-	{
-		.name = LPASS_BE_TERT_MI2S_TX,
-		.stream_name = "Tertiary MI2S Capture",
-		.cpu_dai_name = "msm-dai-q6-mi2s.2",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-	{
-		.name = LPASS_BE_QUAT_MI2S_RX,
-		.stream_name = "Quaternary MI2S Playback",
-		.cpu_dai_name = "msm-dai-q6-mi2s.3",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "max98927", //"msm-stub-codec.1",
-		.codec_dai_name = "max98927-aif1", //"msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-	},
-	{
-		.name = LPASS_BE_QUAT_MI2S_TX,
-		.stream_name = "Quaternary MI2S Capture",
-		.cpu_dai_name = "msm-dai-q6-mi2s.3",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "max98927", //"msm-stub-codec.1",
-		.codec_dai_name = "max98927-aif1",  //"msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-};
-
-static struct snd_soc_dai_link_component tfa98xx_dai_link_component[]=
-{
-         {
-                 .name= "tfa98xx.2-0034",
-                 .dai_name="tfa98xx-aif-2-34",
-         },
-};
-
-static struct snd_soc_dai_link msm_mi2s_be_dai_links_tfa[] = {
-	{
-		.name = LPASS_BE_PRI_MI2S_RX,
-		.stream_name = "Primary MI2S Playback",
-		.cpu_dai_name = "msm-dai-q6-mi2s.0",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_PRI_MI2S_RX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-	},
-	{
-		.name = LPASS_BE_PRI_MI2S_TX,
-		.stream_name = "Primary MI2S Capture",
-		.cpu_dai_name = "msm-dai-q6-mi2s.0",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_PRI_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-	{
-		.name = LPASS_BE_SEC_MI2S_RX,
-		.stream_name = "Secondary MI2S Playback",
-		.cpu_dai_name = "msm-dai-q6-mi2s.1",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_SECONDARY_MI2S_RX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-	},
-	{
-		.name = LPASS_BE_SEC_MI2S_TX,
-		.stream_name = "Secondary MI2S Capture",
-		.cpu_dai_name = "msm-dai-q6-mi2s.1",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_SECONDARY_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-	{
-		.name = LPASS_BE_TERT_MI2S_RX,
-		.stream_name = "Tertiary MI2S Playback",
-		.cpu_dai_name = "msm-dai-q6-mi2s.2",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_TERTIARY_MI2S_RX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-	},
-	{
-		.name = LPASS_BE_TERT_MI2S_TX,
-		.stream_name = "Tertiary MI2S Capture",
-		.cpu_dai_name = "msm-dai-q6-mi2s.2",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-	{
-		.name = LPASS_BE_QUAT_MI2S_RX,
-		.stream_name = "Quaternary MI2S Playback",
-		.cpu_dai_name = "msm-dai-q6-mi2s.3",
-		.platform_name = "msm-pcm-routing",
-		.codecs = tfa98xx_dai_link_component,
-		.num_codecs = ARRAY_SIZE(tfa98xx_dai_link_component),
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-	},
-	{
-		.name = LPASS_BE_QUAT_MI2S_TX,
-		.stream_name = "Quaternary MI2S Capture",
-		.cpu_dai_name = "msm-dai-q6-mi2s.3",
-		.platform_name = "msm-pcm-routing",
-		.codecs = tfa98xx_dai_link_component,
-		.num_codecs = ARRAY_SIZE(tfa98xx_dai_link_component),
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ops = &msm_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-};
-#endif
 
 static struct snd_soc_dai_link msm_auxpcm_be_dai_links[] = {
 	/* Primary AUX PCM Backend DAI Links */
@@ -6821,24 +6667,6 @@ static struct snd_soc_dai_link msm_auxpcm_be_dai_links[] = {
 	},
 };
 
-// MM.Audio, 2019/07/13, add for screen record headset mic path
-static struct snd_soc_dai_link msm_afe_rxtx_lb_be_dai_link[] = {
-	{
-		.name = LPASS_BE_AFE_LOOPBACK_TX,
-		.stream_name = "AFE Loopback Capture",
-		.cpu_dai_name = "msm-dai-q6-dev.24577",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_AFE_LOOPBACK_TX,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ignore_pmdown_time = 1,
-		.ignore_suspend = 1,
-	},
-};
-
 static struct snd_soc_dai_link msm_tavil_snd_card_dai_links[
 			 ARRAY_SIZE(msm_common_dai_links) +
 			 ARRAY_SIZE(msm_tavil_fe_dai_links) +
@@ -6848,9 +6676,7 @@ static struct snd_soc_dai_link msm_tavil_snd_card_dai_links[
 			 ARRAY_SIZE(msm_wcn_be_dai_links) +
 			 ARRAY_SIZE(ext_disp_be_dai_link) +
 			 ARRAY_SIZE(msm_mi2s_be_dai_links) +
-			 // MM.Audio, 2019/07/13, add for screen record headset mic path
-			 ARRAY_SIZE(msm_auxpcm_be_dai_links) +
-			 ARRAY_SIZE(msm_afe_rxtx_lb_be_dai_link)];
+			 ARRAY_SIZE(msm_auxpcm_be_dai_links)];
 
 static int msm_snd_card_tavil_late_probe(struct snd_soc_card *card)
 {
@@ -6985,7 +6811,6 @@ static int msm_prepare_us_euro(struct snd_soc_card *card)
 				snd_soc_card_get_drvdata(card);
 	int ret = 0;
 
-#if 0
 	if (pdata->us_euro_gpio >= 0) {
 		dev_dbg(card->dev, "%s: us_euro gpio request %d", __func__,
 			pdata->us_euro_gpio);
@@ -6998,12 +6823,6 @@ static int msm_prepare_us_euro(struct snd_soc_card *card)
 	}
 
 	return ret;
-#else
-	pdata->us_euro_gpio_value = 1;
-	setHpSwGpioPin(pdata->us_euro_gpio_value);
-
-	return ret;
-#endif
 }
 
 static int msm_audrx_stub_init(struct snd_soc_pcm_runtime *rtd)
@@ -7137,94 +6956,6 @@ static const struct of_device_id sdm845_asoc_machine_of_match[]  = {
 	{},
 };
 
-#if 1
-/*2018/06/14 @bsp add for support notify audio adapter switch*/
-static int cc_audio_adapter_detect_callback(struct notifier_block *nb,
-				unsigned long value, void *data)
-{
-
-	if (value == 1) {
-		pr_err("%s:audio_adapter attached!\n", __func__);
-
-		if (gpio_is_valid(ldo_sw_gpio)) {
-			gpio_set_value_cansleep(ldo_sw_gpio, 1);
-			pr_err("ldo_sw_gpio set to 1\n");
-		} else {
-			pr_err("ldo_sw_gpio gpio_is_valid failed\n");
-		}
-		msleep_interruptible(20);
-
-		if (gpio_is_valid(usb_sw_gpio)) {
-			gpio_set_value_cansleep(usb_sw_gpio, 1);
-			pr_err("usb_sw_gpio set to 1\n");
-		} else {
-			pr_err("usb_sw_gpio gpio_is_valid failed\n");
-		}
-
-		if (gpio_is_valid(mbhc_sw_gpio)) {
-			gpio_set_value_cansleep(mbhc_sw_gpio, 0);
-			pr_err("mbhc_sw_gpio set to 0\n");
-		} else {
-			pr_err("mbhc_sw_gpio gpio_is_valid failed\n");
-		}
-
-	} else if (value == 0) {
-		pr_err("%s:audio_adapter removal!\n", __func__);
-
-		if (gpio_is_valid(mbhc_sw_gpio)) {
-			gpio_set_value_cansleep(mbhc_sw_gpio, 1);
-			pr_err("mbhc_sw_gpio set to 1\n");
-		} else {
-			pr_err("mbhc_sw_gpio gpio_is_valid failed\n");
-		}
-
-		if (gpio_is_valid(usb_sw_gpio)) {
-			gpio_set_value_cansleep(usb_sw_gpio, 0);
-		} else {
-			pr_err("usb_sw_gpio gpio_is_valid failed\n");
-		}
-
-		if (gpio_is_valid(ldo_sw_gpio)) {
-			gpio_set_value_cansleep(ldo_sw_gpio, 0);
-			pr_err("ldo_sw_gpio set to 0\n");
-		} else {
-			pr_err("ldo_sw_gpio gpio_is_valid failed\n");
-		}
-
-	} else
-		pr_err("%s:audio adapter value = %lu\n", __func__, value);
-
-	return NOTIFY_OK;
-}
-
-static struct notifier_block typec_cc_notifier = {
-	.notifier_call = cc_audio_adapter_detect_callback,
-};
-#endif
-
-// suzhiguang,for usb sw/hp sw control
-void setUsbSwGpioPin(int value)
-{
-	if (gpio_is_valid(usb_sw_gpio)) {
-		gpio_set_value_cansleep(usb_sw_gpio, value);
-		pr_err("%s usb_sw_gpio set to %d\n", __func__, value);
-	} else {
-		pr_err("%s usb_sw_gpio gpio_is_valid failed\n", __func__);
-	}
-}
-EXPORT_SYMBOL(setUsbSwGpioPin);
-
-void setHpSwGpioPin(int value)
-{
-	if (gpio_is_valid(hp_sw_gpio)) {
-		gpio_set_value_cansleep(hp_sw_gpio, value);
-		pr_err("%s hp_sw_gpio set to %d\n", __func__, value);
-	} else {
-		pr_err("%s hp_sw_gpio gpio_is_valid failed\n", __func__);
-	}
-}
-EXPORT_SYMBOL(setHpSwGpioPin);
-
 static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 {
 	struct snd_soc_card *card = NULL;
@@ -7232,11 +6963,6 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 	int len_1, len_2, len_3, len_4;
 	int total_links;
 	const struct of_device_id *match;
-	// MM.Audio, 2019/07/13, add for screen record headset mic path
-	uint32_t afe_loopback_intf = 0;
-	// suzhiguang,for config smartpa dailink.
-	int ret;
-	const char *smartpa_type;
 
 	match = of_match_node(sdm845_asoc_machine_of_match, dev->of_node);
 	if (!match) {
@@ -7286,75 +7012,36 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 			       sizeof(ext_disp_be_dai_link));
 			total_links += ARRAY_SIZE(ext_disp_be_dai_link);
 		}
-#if 0
 		if (of_property_read_bool(dev->of_node,
 					  "qcom,mi2s-audio-intf")) {
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_SND_SOC_NXP_CHIP
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+			if (!blocking_notifier_call_chain(&tfa98xx_sdm845_notifier_list, TFA98XX_NOTIFIER_DETECTED, NULL)) {
+#else
+			if (!tfa98xx_detected()) {
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+				dev_err(dev, "%s(): Remove tfa98xx because err\n",
+						__func__);
+				msm_mi2s_be_dai_links[4].codec_name = "msm-stub-codec.1";
+				msm_mi2s_be_dai_links[4].codec_dai_name = "msm-stub-rx";
+			} else {
+				msm_mi2s_be_dai_links[4].codec_name = "tfa98xx-aif";
+				msm_mi2s_be_dai_links[4].codec_dai_name = "tfa98xx-aif";
+			}
+#endif  /* CONFIG_SND_SOC_NXP_CHIP */
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-004 */
 			memcpy(msm_tavil_snd_card_dai_links + total_links,
 			       msm_mi2s_be_dai_links,
 			       sizeof(msm_mi2s_be_dai_links));
 			total_links += ARRAY_SIZE(msm_mi2s_be_dai_links);
 		}
-#else
-	// suzhiguang,config smartpa dailink
-	if (of_property_read_bool(dev->of_node,
-				  "qcom,mi2s-audio-intf")) {
-		ret = of_property_read_string(dev->of_node,
-					"op,smartpa", &smartpa_type);
-		if (ret) {
-			pr_err("read smartpa type error\n");
-		} else {
-			pr_err("smartpa dts config is %s\n", smartpa_type);
-			if (smartpa_present) {
-				pr_err("smartpa_present\n");
-				if (!strcmp(smartpa_type, "max98927")) {
-					memcpy(msm_tavil_snd_card_dai_links + total_links,
-					   msm_mi2s_be_dai_links_max,
-					   sizeof(msm_mi2s_be_dai_links_max));
-					total_links += ARRAY_SIZE(msm_mi2s_be_dai_links_max);
-				} else if (!strcmp(smartpa_type, "tfa98xx")) {
-					memcpy(msm_tavil_snd_card_dai_links + total_links,
-					   msm_mi2s_be_dai_links_tfa,
-					   sizeof(msm_mi2s_be_dai_links_tfa));
-					total_links += ARRAY_SIZE(msm_mi2s_be_dai_links_tfa);
-				} else {
-					memcpy(msm_tavil_snd_card_dai_links + total_links,
-						msm_mi2s_be_dai_links,
-						sizeof(msm_mi2s_be_dai_links));
-					total_links += ARRAY_SIZE(msm_mi2s_be_dai_links);
-					pr_err("no smartpa dts config match,use default\n");
-				}
-			} else {
-				memcpy(msm_tavil_snd_card_dai_links + total_links,
-					msm_mi2s_be_dai_links,
-					sizeof(msm_mi2s_be_dai_links));
-				total_links += ARRAY_SIZE(msm_mi2s_be_dai_links);
-				pr_err("no smartpa found,use default\n");
-			}
-		}
-	}
-#endif
-
 		if (of_property_read_bool(dev->of_node,
 					  "qcom,auxpcm-audio-intf")) {
 			memcpy(msm_tavil_snd_card_dai_links + total_links,
 			msm_auxpcm_be_dai_links,
 			sizeof(msm_auxpcm_be_dai_links));
 			total_links += ARRAY_SIZE(msm_auxpcm_be_dai_links);
-		}
-		// MM.Audio, 2019/07/13, add for screen record headset mic path
-		ret = of_property_read_u32(dev->of_node,
-						 "qcom,afe-rxtx-lb",&afe_loopback_intf);
-		if (ret) {
-			dev_dbg(dev, "%s: No DT match AFE loopback audio interface\n",
-					__func__);
-		} else {
-			if (afe_loopback_intf) {
-				memcpy(msm_tavil_snd_card_dai_links + total_links,
-					msm_afe_rxtx_lb_be_dai_link,
-					sizeof(msm_afe_rxtx_lb_be_dai_link));
-				total_links +=
-					ARRAY_SIZE(msm_afe_rxtx_lb_be_dai_link);
-			}
 		}
 		dailink = msm_tavil_snd_card_dai_links;
 	} else if (!strcmp(match->data, "stub_codec")) {
@@ -7381,7 +7068,6 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 	return card;
 }
 
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X)
 static int msm_wsa881x_init(struct snd_soc_component *component)
 {
 	u8 spkleft_ports[WSA881X_MAX_SWR_PORTS] = {100, 101, 102, 106};
@@ -7621,7 +7307,6 @@ err_free_dev_info:
 err:
 	return ret;
 }
-#endif
 
 static void msm_i2s_auxpcm_init(struct platform_device *pdev)
 {
@@ -7668,15 +7353,21 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	const struct of_device_id *match;
 	int ret;
 	const char *usb_c_dt = "qcom,msm-mbhc-usbc-audio-supported";
-	// suzhiguang,add for parse dt.
-	struct device_node *np;
 
 	if (!pdev->dev.of_node) {
 		dev_err(&pdev->dev, "No platform supplied from device tree\n");
 		return -EINVAL;
 	}
-	np = pdev->dev.of_node;
-
+#ifdef CONFIG_SH_AUDIO_DRIVER /*A-004*/
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+	if(wsa8815_sdm845_notifier_register_count == 0){
+		register_wsa8815_sdm845_notifier(&shub_audio_wsa8815_handler);
+		wsa8815_sdm845_notifier_register_count = 1;
+	}
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*A-004*/
 	pdata = devm_kzalloc(&pdev->dev,
 			sizeof(struct msm_asoc_mach_data), GFP_KERNEL);
 	if (!pdata)
@@ -7705,6 +7396,18 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 			ret);
 		goto err;
 	}
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_ARCH_PUCCI
+	pdata->lineout_amp_gpio= of_get_named_gpio(card->dev->of_node,
+				    "qcom,lineout-amp-gpio", 0);
+	if (!gpio_is_valid(pdata->lineout_amp_gpio)) {
+		dev_err(card->dev, "%s, property %s not in node %s",
+			__func__, "qcom,lineout-amp-gpio",
+			card->dev->of_node->full_name);
+	}
+#endif
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-004 */
 
 	match = of_match_node(sdm845_asoc_machine_of_match,
 			pdev->dev.of_node);
@@ -7738,13 +7441,26 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto err;
 	}
-
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X)
 	ret = msm_init_wsa_dev(pdev, card);
-	if (ret)
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_ARCH_JOHNNY
+	if (ret){
+		if(wsa8815_smartpa_detect_finished >= 0){
+			ret = -EPROBE_DEFER;
+			goto err;
+		}else
+			pr_err("wsa8815_smartpa_detect_finished is -1\n");
+	}
+#else
+	if (ret){
 		goto err;
-#endif
-
+	}
+#endif /* CONFIG_ARCH_JOHNNY */
+#else
+	if (ret){
+		goto err;
+	}
+#endif /* CONFIG_SH_AUDIO_DRIVER *//* A-004 */
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
 	if (ret == -EPROBE_DEFER) {
 		if (codec_reg_done)
@@ -7824,73 +7540,6 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	if (of_find_property(pdev->dev.of_node, usb_c_dt, NULL))
 		wcd_mbhc_cfg.swap_gnd_mic = msm_swap_gnd_mic;
 
-#if 1
-	/*2018/06/14 @bsp add for support notify audio adapter switch*/
-	pr_err("%s: fsa4480_enable is %s\n", __func__, fsa4480_enable ? "true": "false");
-	if (of_property_read_bool(np, "op,usb_sw") && !fsa4480_enable) {
-		pr_err("%s usb_sw find\n", __func__);
-		if (audio_adapter_flag)
-			pr_err("%s audio_adapter_flag = %d\n",__func__,audio_adapter_flag);
-
-		mbhc_sw_gpio = of_get_named_gpio(np, "mbhc_sw", 0);
-		if (mbhc_sw_gpio < 0){
-			pr_err("mbhc_sw_gpio of get gpio failed\n");
-		} else {
-			gpio_free(mbhc_sw_gpio);
-			ret = devm_gpio_request_one(&pdev->dev, mbhc_sw_gpio,
-				GPIOF_OUT_INIT_HIGH, "mbhc sw gpio");
-			if (ret) {
-				pr_err("%s devm_gpio_request_one mbhc_sw_gpio failed\n",__func__);
-			}
-		}
-
-		usb_sw_gpio = of_get_named_gpio(np, "usb_sw", 0);
-		if (usb_sw_gpio < 0){
-			pr_err("usb_sw_gpio of get gpio failed\n");
-		} else {
-			gpio_free(usb_sw_gpio);
-			ret = devm_gpio_request_one(&pdev->dev, usb_sw_gpio,
-				GPIOF_OUT_INIT_LOW, "usb sw gpio");
-			if (ret) {
-				pr_err("%s devm_gpio_request_one usb sw gpio failed\n",__func__);
-			}
-		}
-
-		hp_sw_gpio = of_get_named_gpio(np, "hp_sw", 0);
-		if (hp_sw_gpio < 0){
-			pr_err("hp_sw_gpio of get gpio failed\n");
-		} else {
-                            pr_err("hp_sw_gpio of get gpio success\n");
-			gpio_free(hp_sw_gpio);
-			ret = devm_gpio_request_one(&pdev->dev, hp_sw_gpio,
-				GPIOF_OUT_INIT_LOW, "hp sw gpio");
-			if (ret) {
-				pr_err("%s devm_gpio_request_one hp_sw_gpio failed\n",__func__);
-			}
-		}
-
-		ldo_sw_gpio = of_get_named_gpio(np, "ldo_sw", 0);
-		if (ldo_sw_gpio < 0){
-			pr_err("ldo_sw_gpio of get gpio failed\n");
-		} else {
-            pr_err("ldo_sw_gpio of get gpio success\n");
-			gpio_free(ldo_sw_gpio);
-			ret = devm_gpio_request_one(&pdev->dev, ldo_sw_gpio,
-				GPIOF_OUT_INIT_LOW, "ldo sw gpio");
-			if (ret) {
-				pr_err("%s devm_gpio_request_one ldo_sw_gpio failed\n",__func__);
-			}
-		}
-
-	    register_cc_notifier_client(&typec_cc_notifier);
-		if (audio_adapter_flag) {
-			pr_err("%s audio_adapter_flag init to handle usbtypeC headset\n",__func__);
-			cc_audio_adapter_detect_callback(NULL, 1, NULL);
-		}
-	}
-#endif
-
-	wcd_mbhc_cfg.swap_gnd_mic = msm_swap_gnd_mic;
 	ret = msm_prepare_us_euro(card);
 	if (ret)
 		dev_dbg(&pdev->dev, "msm_prepare_us_euro failed (%d)\n",
@@ -7916,6 +7565,11 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		pr_err("%s: Audio notifier register failed ret = %d\n",
 			__func__, ret);
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
+#ifdef CONFIG_SND_SOC_NXP_CHIP
+		msm_tfa98xx_later_probe(pdev);
+#endif /* CONFIG_SND_SOC_NXP_CHIP */
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-004 */
 	return 0;
 err:
 	msm_release_pinctrl(pdev);
@@ -7938,6 +7592,15 @@ static int msm_asoc_machine_remove(struct platform_device *pdev)
 
 	msm_release_pinctrl(pdev);
 	snd_soc_unregister_card(card);
+#ifdef CONFIG_SH_AUDIO_DRIVER /*A-004*/
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+	unregister_wsa8815_sdm845_notifier(&shub_audio_wsa8815_handler);
+	wsa8815_smartpa_detect_finished = 0;
+	wsa8815_sdm845_notifier_register_count = 0;
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*A-004*/
 	return 0;
 }
 

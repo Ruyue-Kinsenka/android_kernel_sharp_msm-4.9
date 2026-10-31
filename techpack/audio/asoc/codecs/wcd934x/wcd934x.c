@@ -50,6 +50,14 @@
 #include "../wcdcal-hwdep.h"
 #include "wcd934x-dsd.h"
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /* For LKM */ /* A-006 */
+
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+#include "sharp/shaudio_sdm845.h"
+#include "sharp/shaudio_wcd934x_notifier.h"
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* For LKM */ /* A-006 */
+
 #define WCD934X_RATES_MASK (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 			    SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000 |\
 			    SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_192000 |\
@@ -657,6 +665,77 @@ static const struct tavil_reg_mask_val tavil_spkr_mode1[] = {
 };
 
 static int __tavil_enable_efuse_sensing(struct tavil_priv *tavil);
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-006 */
+#define	DIAG_DEBUGMODE_MSK		0x01
+#define	DIAG_DEBUGMODE_OFF		0x00
+#define	DIAG_MICBIAS_MSK		0x02
+#define	DIAG_MICBIAS_ON			0x02
+#define	DIAG_MICBIAS_OFF		0x00
+#define	DIAG_CODECSTOP_MSK		0x04
+#define	DIAG_CODECSTOP_ON		0x04
+#define	DIAG_CODECSTOP_OFF		0x00
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* A-006 */
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-006 */
+
+struct tavil_priv *diag_codec_switch;
+static int bias_mode_for_testmode = 0;
+static bool irq_mode_for_testmode  = true;
+
+int diag_codec_get_bias_mode(void)
+{
+	return bias_mode_for_testmode;
+}
+#ifndef CONFIG_SND_SOC_TREBLE_ENABLE
+EXPORT_SYMBOL_GPL(diag_codec_get_bias_mode);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+
+void diag_codec_set_bias_mode(int mode)
+{
+	struct wcd_mbhc mbhc = diag_codec_switch->mbhc->wcd_mbhc;
+	bias_mode_for_testmode = mode;
+
+	if(irq_mode_for_testmode){
+		if((bias_mode_for_testmode & DIAG_CODECSTOP_MSK) == DIAG_CODECSTOP_ON ){
+            mbhc.mbhc_cb->irq_control(mbhc.codec, mbhc.intr_ids->mbhc_sw_intr, false);
+            mbhc.mbhc_cb->irq_control(mbhc.codec, mbhc.intr_ids->mbhc_hs_rem_intr, false);
+            mbhc.mbhc_cb->irq_control(mbhc.codec, mbhc.intr_ids->mbhc_hs_ins_intr, false);
+			irq_mode_for_testmode = false;
+		}
+	}else{
+		if((bias_mode_for_testmode & DIAG_CODECSTOP_MSK) == DIAG_CODECSTOP_OFF){
+            mbhc.mbhc_cb->irq_control(mbhc.codec, mbhc.intr_ids->mbhc_sw_intr, true);
+            mbhc.mbhc_cb->irq_control(mbhc.codec, mbhc.intr_ids->mbhc_hs_rem_intr, true);
+            mbhc.mbhc_cb->irq_control(mbhc.codec, mbhc.intr_ids->mbhc_hs_ins_intr, true);
+			irq_mode_for_testmode = true;
+		}
+	}
+
+	return;
+}
+#ifndef CONFIG_SND_SOC_TREBLE_ENABLE
+EXPORT_SYMBOL_GPL(diag_codec_set_bias_mode);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+
+int msm_headset_hp_state(void)
+{
+	struct wcd_mbhc mbhc = diag_codec_switch->mbhc->wcd_mbhc;
+	return mbhc.headset_jack.status;
+}
+#ifndef CONFIG_SND_SOC_TREBLE_ENABLE
+EXPORT_SYMBOL_GPL(msm_headset_hp_state);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+
+int msm_headset_bu_state(void)
+{
+	struct wcd_mbhc mbhc = diag_codec_switch->mbhc->wcd_mbhc;
+	return mbhc.button_jack.status;
+}
+#ifndef CONFIG_SND_SOC_TREBLE_ENABLE
+EXPORT_SYMBOL_GPL(msm_headset_bu_state);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* A-006 */
 
 /**
  * tavil_set_spkr_gain_offset - offset the speaker path
@@ -4211,11 +4290,6 @@ static void tavil_codec_set_tx_hold(struct snd_soc_codec *codec,
 	case WCD934X_ANA_AMIC1:
 	case WCD934X_ANA_AMIC2:
 		snd_soc_update_bits(codec, WCD934X_ANA_AMIC2, mask, val);
-		// suzhiguang,sleep 150ms to avoid mic pop.
-	        if (amic_reg == WCD934X_ANA_AMIC2) {
-			pr_err("begin to sleep 150 ms\n");
-			usleep_range(150 * 1000, 150 * 1010);
-		}
 		break;
 	case WCD934X_ANA_AMIC3:
 	case WCD934X_ANA_AMIC4:
@@ -6257,77 +6331,77 @@ static const struct snd_kcontrol_new tavil_snd_controls[] = {
 	SOC_SINGLE_TLV("ADC3 Volume", WCD934X_ANA_AMIC3, 0, 20, 0, analog_gain),
 	SOC_SINGLE_TLV("ADC4 Volume", WCD934X_ANA_AMIC4, 0, 20, 0, analog_gain),
 
-	SOC_SINGLE_S8_TLV("RX0 Digital Volume", WCD934X_CDC_RX0_RX_VOL_CTL,
-		-84, 40, digital_gain), /* -84dB min - 40dB max */
-	SOC_SINGLE_S8_TLV("RX1 Digital Volume", WCD934X_CDC_RX1_RX_VOL_CTL,
-		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX2 Digital Volume", WCD934X_CDC_RX2_RX_VOL_CTL,
-		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX3 Digital Volume", WCD934X_CDC_RX3_RX_VOL_CTL,
-		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX4 Digital Volume", WCD934X_CDC_RX4_RX_VOL_CTL,
-		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX7 Digital Volume", WCD934X_CDC_RX7_RX_VOL_CTL,
-		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX8 Digital Volume", WCD934X_CDC_RX8_RX_VOL_CTL,
-		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX0 Mix Digital Volume",
-		WCD934X_CDC_RX0_RX_VOL_MIX_CTL, -84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX1 Mix Digital Volume",
-		WCD934X_CDC_RX1_RX_VOL_MIX_CTL, -84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX2 Mix Digital Volume",
-		WCD934X_CDC_RX2_RX_VOL_MIX_CTL, -84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX3 Mix Digital Volume",
-		WCD934X_CDC_RX3_RX_VOL_MIX_CTL, -84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX4 Mix Digital Volume",
-		WCD934X_CDC_RX4_RX_VOL_MIX_CTL, -84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX7 Mix Digital Volume",
-		WCD934X_CDC_RX7_RX_VOL_MIX_CTL, -84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("RX8 Mix Digital Volume",
-		WCD934X_CDC_RX8_RX_VOL_MIX_CTL, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX0 Digital Volume", WCD934X_CDC_RX0_RX_VOL_CTL,
+		0, -84, 40, digital_gain), /* -84dB min - 40dB max */
+	SOC_SINGLE_SX_TLV("RX1 Digital Volume", WCD934X_CDC_RX1_RX_VOL_CTL,
+		0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX2 Digital Volume", WCD934X_CDC_RX2_RX_VOL_CTL,
+		0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX3 Digital Volume", WCD934X_CDC_RX3_RX_VOL_CTL,
+		0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX4 Digital Volume", WCD934X_CDC_RX4_RX_VOL_CTL,
+		0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX7 Digital Volume", WCD934X_CDC_RX7_RX_VOL_CTL,
+		0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX8 Digital Volume", WCD934X_CDC_RX8_RX_VOL_CTL,
+		0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX0 Mix Digital Volume",
+		WCD934X_CDC_RX0_RX_VOL_MIX_CTL, 0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX1 Mix Digital Volume",
+		WCD934X_CDC_RX1_RX_VOL_MIX_CTL, 0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX2 Mix Digital Volume",
+		WCD934X_CDC_RX2_RX_VOL_MIX_CTL, 0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX3 Mix Digital Volume",
+		WCD934X_CDC_RX3_RX_VOL_MIX_CTL, 0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX4 Mix Digital Volume",
+		WCD934X_CDC_RX4_RX_VOL_MIX_CTL, 0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX7 Mix Digital Volume",
+		WCD934X_CDC_RX7_RX_VOL_MIX_CTL, 0, -84, 40, digital_gain),
+	SOC_SINGLE_SX_TLV("RX8 Mix Digital Volume",
+		WCD934X_CDC_RX8_RX_VOL_MIX_CTL, 0, -84, 40, digital_gain),
 
-	SOC_SINGLE_S8_TLV("DEC0 Volume", WCD934X_CDC_TX0_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC0 Volume", WCD934X_CDC_TX0_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("DEC1 Volume", WCD934X_CDC_TX1_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC1 Volume", WCD934X_CDC_TX1_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("DEC2 Volume", WCD934X_CDC_TX2_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC2 Volume", WCD934X_CDC_TX2_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("DEC3 Volume", WCD934X_CDC_TX3_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC3 Volume", WCD934X_CDC_TX3_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("DEC4 Volume", WCD934X_CDC_TX4_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC4 Volume", WCD934X_CDC_TX4_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("DEC5 Volume", WCD934X_CDC_TX5_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC5 Volume", WCD934X_CDC_TX5_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("DEC6 Volume", WCD934X_CDC_TX6_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC6 Volume", WCD934X_CDC_TX6_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("DEC7 Volume", WCD934X_CDC_TX7_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC7 Volume", WCD934X_CDC_TX7_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
-	SOC_SINGLE_S8_TLV("DEC8 Volume", WCD934X_CDC_TX8_TX_VOL_CTL,
+	SOC_SINGLE_SX_TLV("DEC8 Volume", WCD934X_CDC_TX8_TX_VOL_CTL, 0,
 		-84, 40, digital_gain),
 
-	SOC_SINGLE_S8_TLV("IIR0 INP0 Volume",
-		WCD934X_CDC_SIDETONE_IIR0_IIR_GAIN_B1_CTL, -84, 40,
+	SOC_SINGLE_SX_TLV("IIR0 INP0 Volume",
+		WCD934X_CDC_SIDETONE_IIR0_IIR_GAIN_B1_CTL, 0, -84, 40,
 		digital_gain),
-	SOC_SINGLE_S8_TLV("IIR0 INP1 Volume",
-		WCD934X_CDC_SIDETONE_IIR0_IIR_GAIN_B2_CTL, -84, 40,
+	SOC_SINGLE_SX_TLV("IIR0 INP1 Volume",
+		WCD934X_CDC_SIDETONE_IIR0_IIR_GAIN_B2_CTL, 0, -84, 40,
 		digital_gain),
-	SOC_SINGLE_S8_TLV("IIR0 INP2 Volume",
-		WCD934X_CDC_SIDETONE_IIR0_IIR_GAIN_B3_CTL, -84, 40,
+	SOC_SINGLE_SX_TLV("IIR0 INP2 Volume",
+		WCD934X_CDC_SIDETONE_IIR0_IIR_GAIN_B3_CTL, 0, -84, 40,
 		digital_gain),
-	SOC_SINGLE_S8_TLV("IIR0 INP3 Volume",
-		WCD934X_CDC_SIDETONE_IIR0_IIR_GAIN_B4_CTL, -84, 40,
+	SOC_SINGLE_SX_TLV("IIR0 INP3 Volume",
+		WCD934X_CDC_SIDETONE_IIR0_IIR_GAIN_B4_CTL, 0, -84, 40,
 		digital_gain),
-	SOC_SINGLE_S8_TLV("IIR1 INP0 Volume",
-		WCD934X_CDC_SIDETONE_IIR1_IIR_GAIN_B1_CTL, -84, 40,
+	SOC_SINGLE_SX_TLV("IIR1 INP0 Volume",
+		WCD934X_CDC_SIDETONE_IIR1_IIR_GAIN_B1_CTL, 0, -84, 40,
 		digital_gain),
-	SOC_SINGLE_S8_TLV("IIR1 INP1 Volume",
-		WCD934X_CDC_SIDETONE_IIR1_IIR_GAIN_B2_CTL, -84, 40,
+	SOC_SINGLE_SX_TLV("IIR1 INP1 Volume",
+		WCD934X_CDC_SIDETONE_IIR1_IIR_GAIN_B2_CTL, 0, -84, 40,
 		digital_gain),
-	SOC_SINGLE_S8_TLV("IIR1 INP2 Volume",
-		WCD934X_CDC_SIDETONE_IIR1_IIR_GAIN_B3_CTL, -84, 40,
+	SOC_SINGLE_SX_TLV("IIR1 INP2 Volume",
+		WCD934X_CDC_SIDETONE_IIR1_IIR_GAIN_B3_CTL, 0, -84, 40,
 		digital_gain),
-	SOC_SINGLE_S8_TLV("IIR1 INP3 Volume",
-		WCD934X_CDC_SIDETONE_IIR1_IIR_GAIN_B4_CTL, -84, 40,
+	SOC_SINGLE_SX_TLV("IIR1 INP3 Volume",
+		WCD934X_CDC_SIDETONE_IIR1_IIR_GAIN_B4_CTL, 0, -84, 40,
 		digital_gain),
 
 	SOC_SINGLE_EXT("ANC Slot", SND_SOC_NOPM, 0, 100, 0, tavil_get_anc_slot,
@@ -10096,6 +10170,39 @@ done:
 	return ret;
 }
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-006 */
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+static int wcd934x_notifier_handler_func(struct notifier_block *nb,
+                                unsigned long function, void *val)
+{
+	int value = 0;
+
+	switch (function) {
+	case WCD934X_NOTIFIER_MSM_HEADSET_HP_STATE:
+		return msm_headset_hp_state();
+	case WCD934X_NOTIFIER_MSM_HEADSET_BU_STATE:
+		return msm_headset_bu_state();
+	case WCD934X_NOTIFIER_DIAG_CODEC_SET_BIAS_MODE:
+		if (val != NULL) {
+			value = *(int *)val;
+			diag_codec_set_bias_mode(value);
+			return 0x00;
+		}
+		else
+			return -EINVAL;
+	default:
+		pr_err("%s error function not found\n", __func__);
+		return -EINVAL;
+	}
+}
+
+static struct notifier_block wcd934x_notifier_handler = {
+		.notifier_call = wcd934x_notifier_handler_func,
+};
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-006 */
+
+
 static int tavil_soc_codec_probe(struct snd_soc_codec *codec)
 {
 	struct wcd9xxx *control;
@@ -10265,6 +10372,15 @@ static int tavil_soc_codec_probe(struct snd_soc_codec *codec)
 	 * can be released allowing the codec to go to SVS2.
 	 */
 	tavil_vote_svs(tavil, false);
+    diag_codec_switch = tavil;
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-006 */
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+	ret = register_wcd934x_snd_notifier(&wcd934x_notifier_handler);
+	if (ret)
+		dev_err(tavil->dev, "error registering notifier\n");
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-006 */
 
 	return ret;
 
@@ -10299,6 +10415,12 @@ static int tavil_soc_codec_remove(struct snd_soc_codec *codec)
 	/* Deinitialize MBHC module */
 	tavil_mbhc_deinit(codec);
 	tavil->mbhc = NULL;
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-006 */
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+	unregister_wcd934x_snd_notifier(&wcd934x_notifier_handler);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* A-006 */
 
 	return 0;
 }

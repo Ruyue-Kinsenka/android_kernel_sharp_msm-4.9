@@ -30,9 +30,13 @@
 #include "wcd-mbhc-adc.h"
 #include "wcd-mbhc-v2.h"
 
-#define WCD_MBHC_ADC_HS_THRESHOLD_MV    1800
+#define WCD_MBHC_ADC_HS_THRESHOLD_MV    1700
 #define WCD_MBHC_ADC_HPH_THRESHOLD_MV   75
+#ifdef CONFIG_SH_AUDIO_DRIVER /* A-004 */
 #define WCD_MBHC_ADC_MICBIAS_MV         2700
+#else
+#define WCD_MBHC_ADC_MICBIAS_MV         1800
+#endif /* CONFIG_SH_AUDIO_DRIVER *//* A-004 */
 #define WCD_MBHC_FAKE_INS_RETRY         4
 
 static int wcd_mbhc_get_micbias(struct wcd_mbhc *mbhc)
@@ -132,7 +136,7 @@ static int wcd_measure_adc_once(struct wcd_mbhc *mbhc, int mux_ctl)
 
 	while (retry--) {
 		/* wait for 600usec to get adc results */
-		usleep_range(600, 610);
+		usleep_range(1500, 1510);
 
 		/* check for ADC Timeout */
 		WCD_MBHC_REG_READ(WCD_MBHC_ADC_TIMEOUT, adc_timeout);
@@ -727,7 +731,7 @@ correct_plug_type:
 			is_pa_on = mbhc->mbhc_cb->hph_pa_on_status(mbhc->codec);
 
 		if ((output_mv <= hs_threshold) &&
-		    (!is_pa_on)) {
+		    (!is_pa_on) && plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
 			/* Check for cross connection*/
 			ret = wcd_check_cross_conn(mbhc);
 			if (ret < 0)
@@ -877,8 +881,6 @@ enable_supply:
 	if (mbhc->mbhc_cb->mbhc_micbias_control)
 		wcd_mbhc_adc_update_fsm_source(mbhc, plug_type);
 exit:
-	if (plug_type == MBHC_PLUG_TYPE_HEADSET)
-		mbhc->micbias_enable = true;
 	if (mbhc->mbhc_cb->mbhc_micbias_control &&
 	    !mbhc->micbias_enable)
 		mbhc->mbhc_cb->mbhc_micbias_control(codec, MIC_BIAS_2,
@@ -940,17 +942,16 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 	unsigned long timeout;
 	int adc_threshold, output_mv, retry = 0;
 	bool hphpa_on = false;
-	u8  moisture_status = 0;
+	u8  moisture_status = 0, mbhc_swich_remove = 0;
 
 	pr_debug("%s: enter\n", __func__);
 	WCD_MBHC_RSC_LOCK(mbhc);
 
+	adc_threshold = wcd_mbhc_adc_get_hs_thres(mbhc);
+
+	mdelay(1000);
 	timeout = jiffies +
 		  msecs_to_jiffies(WCD_FAKE_REMOVAL_MIN_PERIOD_MS);
-	/* liuhaituo@MM.Audio 2018/6/8 modify adc_threshold is consistent with OMR1 */
-	adc_threshold = ((WCD_MBHC_ADC_HS_THRESHOLD_MV *
-				wcd_mbhc_get_micbias(mbhc)) /
-				WCD_MBHC_ADC_MICBIAS_MV);
 
 	do {
 		retry++;
@@ -958,11 +959,18 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 		 * read output_mv every 10ms to look for
 		 * any change in IN2_P
 		 */
+		WCD_MBHC_REG_READ(WCD_MBHC_SWCH_LEVEL_REMOVE, mbhc_swich_remove);
+		if (mbhc_swich_remove) {
+			pr_debug("%s: headset actually removed\n",
+				 __func__);
+			break;
+		}
 		usleep_range(10000, 10100);
+		adc_threshold = wcd_mbhc_adc_get_hs_thres(mbhc);
 		output_mv = wcd_measure_adc_once(mbhc, MUX_CTL_IN2P);
 
-		pr_debug("%s: Check for fake removal: output_mv %d\n",
-			 __func__, output_mv);
+		pr_debug("%s: Check for fake removal: output_mv %d, switch_leave_remove = %d\n",
+			 __func__, output_mv, mbhc_swich_remove);
 		if ((output_mv <= adc_threshold) &&
 		    retry > FAKE_REM_RETRY_ATTEMPTS) {
 			pr_debug("%s: headset is NOT actually removed\n",

@@ -38,6 +38,28 @@
 
 #define WSA881X_NUM_RETRY	5
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /*A-004*/
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+
+static BLOCKING_NOTIFIER_HEAD(wsa8815_sdm845_notifier_list);
+int register_wsa8815_sdm845_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&wsa8815_sdm845_notifier_list, nb);
+}
+EXPORT_SYMBOL(register_wsa8815_sdm845_notifier);
+
+int unregister_wsa8815_sdm845_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&wsa8815_sdm845_notifier_list, nb);
+}
+EXPORT_SYMBOL(unregister_wsa8815_sdm845_notifier);
+#define WSA8815_PROBE_ERROR 0
+#define WSA8815_PROBE_OK 1
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*A-004*/
+
 enum {
 	G_18DB = 0,
 	G_16P5DB,
@@ -53,6 +75,25 @@ enum {
 	G_1P5DB,
 	G_0DB,
 };
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /*B-019*/
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+#include <linux/notifier.h>
+static BLOCKING_NOTIFIER_HEAD(speaker_shub_api_notifier_list);
+int register_tfa98xx_shub_api_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&speaker_shub_api_notifier_list, nb);
+}
+EXPORT_SYMBOL(register_tfa98xx_shub_api_notifier);
+int unregister_tfa98xx_shub_api_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&speaker_shub_api_notifier_list, nb);
+}
+EXPORT_SYMBOL(unregister_tfa98xx_shub_api_notifier);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*B-019*/
 
 enum {
 	DISABLE = 0,
@@ -389,7 +430,7 @@ static ssize_t wsa881x_swrslave_reg_show(char __user *ubuf, size_t count,
 			continue;
 		swr_read(dbgwsa881x->swr_slave, devnum,
 			i, &reg_val, 1);
-		len = snprintf(tmp_buf, sizeof(tmp_buf), "0x%.3x: 0x%.2x\n", i,
+		len = snprintf(tmp_buf, 25, "0x%.3x: 0x%.2x\n", i,
 			       (reg_val & 0xFF));
 		if ((total + len) >= count - 1)
 			break;
@@ -822,8 +863,24 @@ static int wsa881x_enable_swr_dac_port(struct snd_soc_dapm_widget *w,
 				&ch_mask[0], &ch_rate[0], &num_ch[0]);
 		break;
 	case SND_SOC_DAPM_POST_PMU:
+#ifdef CONFIG_SH_AUDIO_DRIVER /* B-019 */
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+		if (!strcmp(w->name, "SpkrRight SWR DAC_Port"))
+			blocking_notifier_call_chain(&speaker_shub_api_notifier_list, 1, NULL);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* B-019 */
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
+#ifdef CONFIG_SH_AUDIO_DRIVER /* B-019 */
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+		if (!strcmp(w->name, "SpkrRight SWR DAC_Port"))
+			blocking_notifier_call_chain(&speaker_shub_api_notifier_list, 0, NULL);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* B-019 */
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		port_id[num_port] = wsa881x->port[SWR_DAC_PORT].port_id;
@@ -1333,6 +1390,13 @@ static int wsa881x_swr_probe(struct swr_device *pdev)
 		dev_dbg(&pdev->dev,
 			"%s get devnum %d for dev addr %lx failed\n",
 			__func__, devnum, pdev->addr);
+#ifdef CONFIG_SH_AUDIO_DRIVER /*A-004*/
+#ifdef CONFIG_ARCH_JOHNNY
+#ifdef CONFIG_SND_SOC_TREBLE_ENABLE
+		blocking_notifier_call_chain(&wsa8815_sdm845_notifier_list, WSA8815_PROBE_ERROR, NULL);
+#endif /* CONFIG_SND_SOC_TREBLE_ENABLE */
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*A-004*/
 		goto dev_err;
 	}
 	pdev->dev_num = devnum;
@@ -1352,7 +1416,15 @@ static int wsa881x_swr_probe(struct swr_device *pdev)
 		dev_err(&pdev->dev, "%s: Codec registration failed\n",
 			__func__);
 		goto dev_err;
+#ifdef CONFIG_SH_AUDIO_DRIVER /*A-004*/
+#ifdef CONFIG_ARCH_JOHNNY
+	}else
+		blocking_notifier_call_chain(&wsa8815_sdm845_notifier_list, WSA8815_PROBE_OK, NULL);
+#else
 	}
+#endif /* CONFIG_ARCH_JOHNNY */
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*A-004*/
+
 	mutex_init(&wsa881x->res_lock);
 	mutex_init(&wsa881x->temp_lock);
 
