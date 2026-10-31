@@ -12,6 +12,8 @@ obj-y     = fork.o exec_domain.o panic.o \
 	    async.o range.o smpboot.o ucount.o
 
 obj-$(CONFIG_MULTIUSER) += groups.o
+obj-y += panic_logstore.o
+obj-y += pucci_milestone.o
 
 ifdef CONFIG_FUNCTION_TRACER
 # Do not trace internal ftrace files

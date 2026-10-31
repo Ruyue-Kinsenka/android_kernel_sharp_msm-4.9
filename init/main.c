@@ -42,6 +42,7 @@
 #include <linux/cpuset.h>
 #include <linux/cgroup.h>
 #include <linux/efi.h>
+#include <linux/pucci_milestone.h>
 #include <linux/tick.h>
 #include <linux/interrupt.h>
 #include <linux/taskstats_kern.h>
@@ -533,6 +534,7 @@ asmlinkage __visible void __init start_kernel(void)
 	sort_main_extable();
 	trap_init();
 	mm_init();
+	pucci_milestone(1, 0xFFFF8000);
 
 	/*
 	 * Set up the scheduler prior starting any interrupts (such as the
@@ -675,6 +677,7 @@ asmlinkage __visible void __init start_kernel(void)
 	ftrace_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
+	pucci_milestone(2, 0xFFFFFF00);
 	rest_init();
 
 	prevent_tail_call_optimization();
@@ -783,17 +786,24 @@ static int __init_or_module do_one_initcall_debug(initcall_t fn)
 
 int __init_or_module do_one_initcall(initcall_t fn)
 {
+	static int ic_idx;
 	int count = preempt_count();
 	int ret;
+	int idx;
 	char msgbuf[64];
 
 	if (initcall_blacklisted(fn))
 		return -EPERM;
 
+	idx = ic_idx++;
+	pucci_initcall_mark(idx, 0);
+
 	if (initcall_debug)
 		ret = do_one_initcall_debug(fn);
 	else
 		ret = fn();
+
+	pucci_initcall_mark(idx, 1);
 
 	msgbuf[0] = 0;
 
@@ -886,6 +896,7 @@ static void __init do_basic_setup(void)
 	do_ctors();
 	usermodehelper_enable();
 	do_initcalls();
+	pucci_milestone(5, 0xFF0000FF);
 }
 
 static void __init do_pre_smp_initcalls(void)
@@ -909,6 +920,7 @@ void __init load_default_modules(void)
 
 static int run_init_process(const char *init_filename)
 {
+	pucci_milestone(7, 0xFFFFFFFF);
 	argv_init[0] = init_filename;
 	return do_execve(getname_kernel(init_filename),
 		(const char __user *const __user *)argv_init,
@@ -961,6 +973,7 @@ static int __ref kernel_init(void *unused)
 {
 	int ret;
 
+	pucci_milestone(3, 0xFF00FF00);
 	kernel_init_freeable();
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
@@ -1032,6 +1045,7 @@ static noinline void __init kernel_init_freeable(void)
 	lockup_detector_init();
 
 	smp_init();
+	pucci_milestone(4, 0xFF00FFFF);
 	sched_init_smp();
 
 	page_alloc_init_late();
@@ -1055,6 +1069,7 @@ static noinline void __init kernel_init_freeable(void)
 	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
+		pucci_milestone(6, 0xFFFF00FF);
 	}
 
 	/*

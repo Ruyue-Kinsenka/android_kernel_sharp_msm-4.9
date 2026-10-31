@@ -45,6 +45,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
 #include <linux/mm.h>
+#include <linux/pucci_milestone.h>
 
 #include <asm/acpi.h>
 #include <asm/fixmap.h>
@@ -344,6 +345,8 @@ void __init setup_arch(char **cmdline_p)
 	}
 
 	init_random_pool();
+
+	pucci_milestone(0, 0xFFFF0000);
 }
 
 static int __init topology_init(void)

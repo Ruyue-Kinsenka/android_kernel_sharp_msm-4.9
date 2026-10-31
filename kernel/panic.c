@@ -29,6 +29,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/exception.h>
 #include <soc/qcom/minidump.h>
+#include <linux/panic_logstore.h>
+#include <linux/pucci_milestone.h>
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -140,6 +142,7 @@ void panic(const char *fmt, ...)
 	int old_cpu, this_cpu;
 	bool _crash_kexec_post_notifiers = crash_kexec_post_notifiers;
 
+	pucci_smark2(23, 0xFFFF00FF);
 	trace_kernel_panic(0);
 
 	/*
@@ -186,6 +189,16 @@ void panic(const char *fmt, ...)
 	if (!test_taint(TAINT_DIE) && oops_in_progress <= 1)
 		dump_stack();
 #endif
+
+	/*
+	 * Dump the log before forcibly shutting down other CPUs because the
+	 * related interrupts (e.g. storage controller) could be running on
+	 * them.  We have no chance to migrate them in this critical context.
+	 */
+	local_irq_enable();
+	do_logstore();
+	mdelay(1000);
+	local_irq_disable();
 
 	/*
 	 * If we have crashed and we have a crash kernel loaded let it handle

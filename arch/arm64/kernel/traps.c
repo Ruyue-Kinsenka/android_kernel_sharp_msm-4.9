@@ -46,6 +46,8 @@
 #include <asm/system_misc.h>
 #include <asm/sysreg.h>
 #include <trace/events/exception.h>
+#include <asm/sections.h>
+#include <linux/pucci_milestone.h>
 
 static const char *handler[]= {
 	"Synchronous Abort",
@@ -320,8 +322,37 @@ static void oops_end(unsigned long flags, struct pt_regs *regs, int notify)
 void die(const char *str, struct pt_regs *regs, int err)
 {
 	enum bug_trap_type bug_type = BUG_TRAP_TYPE_NONE;
-	unsigned long flags = oops_begin();
+	unsigned long flags;
+	u64 _pcoff, _lroff, _far, _esr;
+	static int _dumped;
 	int ret;
+
+	if (!_dumped) {
+		_dumped = 1;
+		asm volatile("mrs %0, far_el1\n\tmrs %1, esr_el1"
+			     : "=r"(_far), "=r"(_esr));
+		_pcoff = regs->pc - (u64)_stext;
+		_lroff = regs->regs[30] - (u64)_stext;
+		pucci_smark2(22, 0xFFFF0000);
+		pucci_dumphex(1200, _pcoff, 8);
+		pucci_dumphex(1300, _lroff, 8);
+		pucci_dumphex(1400, _far >> 32, 8);
+		pucci_dumphex(1500, _far & 0xFFFFFFFF, 8);
+		pucci_dumphex(1600, _esr, 8);
+		{
+			unsigned long *fp = (unsigned long *)regs->regs[29];
+			int i;
+			for (i = 0; i < 6 && fp; i++) {
+				if ((long)fp >= 0 || (unsigned long)fp & 0x7)
+					break;
+				pucci_dumphex(1700 + i * 100,
+					      fp[1] - (u64)_stext, 8);
+				fp = (unsigned long *)fp[0];
+			}
+		}
+	}
+
+	flags = oops_begin();
 
 	if (!user_mode(regs))
 		bug_type = report_bug(regs->pc, regs);
