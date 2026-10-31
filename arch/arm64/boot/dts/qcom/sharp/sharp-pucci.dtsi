@@ -196,6 +196,32 @@
 /*------------------------------*/
 &qupv3_se5_i2c {
 	status = "ok";
+
+	shtps_rmi@26 {
+		status = "ok";
+		compatible = "sharp,shtps_rmi-i2c";
+		reg = <0x26>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <125 0>;
+
+		/* user defined property */
+		shtps_rmi,rst_pin = <&tlmm 99 0>;
+		shtps_rmi,vddh-supply = <&pm8998_l28>;
+		shtps_rmi,vbus-supply = <&pm8998_lvs2>;
+		shtps_rmi,tp_i2c_sda = <&tlmm 85 0>;
+		shtps_rmi,tp_i2c_scl = <&tlmm 86 0>;
+		shtps_rmi,test_mode_gpio = <&tlmm 50 0>;
+		shtps_rmi,tp_int = <&tlmm 125 0>;
+		pinctrl-names = "test_mode_pull_up", "test_mode_pull_down",
+						"panel_active","panel_standby",
+						"int_active","int_standby";
+		pinctrl-0 = <&shtps_test_mode_pull_up>;
+		pinctrl-1 = <&shtps_test_mode_pull_down>;
+		pinctrl-2 = <&shtps_i2c_active>;
+		pinctrl-3 = <&shtps_i2c_standby>;
+		pinctrl-4 = <&shtps_int_active>;
+		pinctrl-5 = <&shtps_int_standby>;
+	};
 };
 
 
