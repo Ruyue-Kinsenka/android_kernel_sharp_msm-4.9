@@ -89,6 +89,7 @@ struct cam_hw_done_event_data {
  * @event_cb:              Callback function array
  * @num_acq:               Total number of acquire in the payload
  * @acquire_info:          Acquired resource array pointer
+ * @acquire_info_size:     Size of the acquire info payload
  * @ctxt_to_hw_map:        HW context (returned)
  *
  */
@@ -96,6 +97,7 @@ struct cam_hw_acquire_args {
 	void                        *context_data;
 	cam_hw_event_cb_func         event_cb;
 	uint32_t                     num_acq;
+	uint64_t                     acquire_info_size;
 	uintptr_t                    acquire_info;
 	void                        *ctxt_to_hw_map;
 };
@@ -182,6 +184,20 @@ struct cam_hw_prepare_update_args {
 	uint32_t                        num_in_map_entries;
 	void                           *priv;
 	struct cam_hw_mgr_dump_pf_data *pf_data;
+};
+
+/**
+ * struct cam_hw_stream_setttings - Payload for config stream command
+ *
+ * @packet:                CSL packet from user mode driver
+ * @ctxt_to_hw_map:        HW context from the acquire
+ * @priv:                  Private pointer of hw update
+ *
+ */
+struct cam_hw_stream_setttings {
+	struct cam_packet              *packet;
+	void                           *ctxt_to_hw_map;
+	void                           *priv;
 };
 
 /**
@@ -316,6 +332,8 @@ struct cam_hw_mgr_intf {
 	int (*hw_start)(void *hw_priv, void *hw_start_args);
 	int (*hw_stop)(void *hw_priv, void *hw_stop_args);
 	int (*hw_prepare_update)(void *hw_priv, void *hw_prepare_update_args);
+	int (*hw_config_stream_settings)(void *hw_priv,
+		void *hw_stream_settings);
 	int (*hw_config)(void *hw_priv, void *hw_config_args);
 	int (*hw_read)(void *hw_priv, void *read_args);
 	int (*hw_write)(void *hw_priv, void *write_args);

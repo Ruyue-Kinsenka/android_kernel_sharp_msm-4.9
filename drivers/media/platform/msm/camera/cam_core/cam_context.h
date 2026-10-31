@@ -95,8 +95,10 @@ struct cam_ctx_request {
 struct cam_ctx_ioctl_ops {
 	int (*acquire_dev)(struct cam_context *ctx,
 			struct cam_acquire_dev_cmd *cmd);
+	int (*acquire_hw)(struct cam_context *ctx, void *args);
 	int (*release_dev)(struct cam_context *ctx,
 			struct cam_release_dev_cmd *cmd);
+	int (*release_hw)(struct cam_context *ctx, void *args);
 	int (*config_dev)(struct cam_context *ctx,
 			struct cam_config_dev_cmd *cmd);
 	int (*start_dev)(struct cam_context *ctx,
@@ -322,6 +324,22 @@ int cam_context_dump_pf_info(struct cam_context *ctx, unsigned long iova,
  */
 int cam_context_handle_acquire_dev(struct cam_context *ctx,
 		struct cam_acquire_dev_cmd *cmd);
+
+/**
+ * cam_context_handle_acquire_hw()
+ *
+ * @brief:        Handle acquire HW command
+ */
+int cam_context_handle_acquire_hw(struct cam_context *ctx,
+		void *args);
+
+/**
+ * cam_context_handle_release_hw()
+ *
+ * @brief:        Handle release HW command
+ */
+int cam_context_handle_release_hw(struct cam_context *ctx,
+		void *args);
 
 /**
  * cam_context_handle_release_dev()
